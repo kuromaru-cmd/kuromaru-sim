@@ -16,8 +16,6 @@
         .neon-text-alert { text-shadow: 0 0 10px rgba(244, 63, 94, 0.8); }
         .neon-text-magic { text-shadow: 0 0 10px rgba(167, 139, 250, 0.8); }
         select { background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2322d3ee' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E"); background-position: right .5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; -webkit-appearance: none; -moz-appearance: none; appearance: none; }
-        @keyframes fadeOut { 0% { opacity: 1; transform: translate(-50%, 0); } 70% { opacity: 1; transform: translate(-50%, -5px); } 100% { opacity: 0; transform: translate(-50%, -10px); } }
-        .animate-fade-out { animation: fadeOut 2.5s ease-out forwards; }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-200 p-4 font-mono min-h-screen relative">
@@ -34,11 +32,12 @@
 【重要：出力形式について】
 スプレッドシートの1つのセルにそのまま貼り付けられるように、JSONの改行やインデント（空白）をすべて削除し、完全に「1行の文字列（Minified JSON）」として出力してください。
 
-{"race":{"updatedAt":"2026/04/09","date":"2026-04-12","raceName":"桜花賞(G1)","location":"阪神","courseName":"芝1600m (外回り)","raceType":"3yo","course":3,"weather":"sunny","bias":3,"pace":2,"cond":2},"horses":[{"no":1,"name":"馬の名前","frame":1,"runStyle":2,"odds":5.5,"baseScore":65,"optBias":3,"optPace":2,"optCond":2,"optCourse":2,"spurt":3,"jockeyClass":"A","specialJockey":true,"popularity":3,"weightDiff":0,"tags":["展開ジョーカー"],"isMarked":true}]}
+{"race":{"updatedAt":"2026/04/09","date":"2026/04/12","raceName":"桜花賞(G1)","location":"阪神","courseName":"芝1600m (外回り)","raceType":"3yo","course":3,"weather":"sunny","bias":3,"pace":2,"cond":2},"horses":[{"no":1,"name":"馬の名前","frame":1,"runStyle":2,"odds":5.5,"baseScore":65,"optBias":3,"optPace":2,"optCond":2,"optCourse":2,"spurt":3,"jockeyClass":"A","specialJockey":true,"popularity":3,"weightDiff":0,"tags":["展開ジョーカー"],"isMarked":true}]}
 
 【各項目のルール】
 [race]
 * updatedAt: 予想データを作成した当日の日付（YYYY/MM/DD形式）
+* date: 対象レースの開催日（YYYY/MM/DD形式）
 * course: 1(小回り), 2(中回り), 3(大箱) ※確定情報
 * raceType: "older"(古馬・標準戦) または "3yo"(3歳若駒戦) ※確定情報
 * weather: "sunny", "cloudy", "rainy"
@@ -218,6 +217,8 @@
                 ];
             }, [selectedHorseData]);
 
+            // 日付をYYYY/MM/DD形式に統一する処理
+            const displayDate = raceInfo.date ? raceInfo.date.replace(/-/g, '/') : "----/--/--";
             const courseText = course === 1 ? "小回り (中山・函館等)" : course === 2 ? "中回り (阪神内等)" : "大箱 (東京・阪神外等)";
             const raceTypeText = raceType === '3yo' ? "3歳若駒戦" : "古馬・標準G1";
 
@@ -260,11 +261,14 @@
                         </p>
                     </header>
 
-                    <div className="bg-slate-950 border border-cyan-700 p-3 md:p-4 rounded-lg mb-6 flex flex-wrap gap-2 md:gap-3 items-center neon-border">
+                    {/* 確定情報パネル（レース名強調・日付フォーマット変更） */}
+                    <div className="bg-slate-950 border border-cyan-700 p-4 md:p-5 rounded-lg mb-6 flex flex-wrap gap-3 md:gap-4 items-center neon-border">
                         <div className="bg-slate-800 px-3 py-1.5 rounded text-cyan-400 text-sm font-bold flex items-center">
-                            <span className="text-[10px] text-slate-400 mr-1 font-normal">開催日:</span>{raceInfo.date}
+                            <span className="text-[10px] text-slate-400 mr-1 font-normal">開催日:</span>{displayDate}
                         </div>
-                        <div className="text-xl md:text-2xl font-black text-white px-2">{raceInfo.raceName}</div>
+                        <div className="bg-slate-800 border-2 border-cyan-400 px-4 py-2 rounded-lg text-2xl md:text-3xl font-black text-white shadow-[0_0_15px_rgba(34,211,238,0.4)]">
+                            {raceInfo.raceName}
+                        </div>
                         <div className="bg-slate-700 px-3 py-1.5 rounded text-xs text-slate-200">{raceInfo.location} {raceInfo.courseName}</div>
                         <div className="bg-slate-800 border border-slate-600 px-3 py-1.5 rounded text-xs text-slate-300 flex items-center">
                             条件: {raceTypeText} <span className="ml-2 text-[10px] text-rose-400 border border-rose-400/50 bg-rose-900/20 px-1.5 py-0.5 rounded">🔒確定</span>
@@ -331,7 +335,7 @@
                         <div className="lg:col-span-4 space-y-6">
                             <div className="bg-slate-950 p-4 rounded-lg border border-rose-900 neon-border-alert relative overflow-hidden">
                                 <div className="absolute top-0 left-0 w-full h-1 bg-rose-600"></div>
-                                <h3 className="text-rose-400 font-bold mb-4 text-sm">▶ MASTER_FLOW OVERRIDES</h3>
+                                <h3 className="text-rose-400 font-bold mb-4 text-sm">▶ 特殊ルールの強制適用</h3>
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between bg-slate-900 p-3 rounded border border-slate-800">
                                         <div className="flex flex-col">
@@ -354,7 +358,7 @@
                             </div>
 
                             <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 neon-border">
-                                <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm">▶ ENVIRONMENT_PARAMS</h3>
+                                <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm">▶ 馬場・展開の手動設定</h3>
                                 <div className="space-y-3">
                                     <div>
                                         <label className="block text-[10px] font-bold text-slate-400 mb-1">天候</label>
@@ -385,7 +389,7 @@
                         </div>
 
                         <div className="lg:col-span-8">
-                            <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm">▶ PROFILING_OUTPUT (出走馬: {horses.length}頭)</h3>
+                            <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm">▶ 総合評価ランキング (出走馬: {horses.length}頭)</h3>
                             <div className="space-y-3">
                                 {calculatedHorses.map((horse, index) => {
                                     const isTop3 = index < 3;
