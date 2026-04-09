@@ -15,7 +15,7 @@
         .neon-text-cyan { text-shadow: 0 0 10px rgba(34, 211, 238, 0.6); }
         .neon-text-alert { text-shadow: 0 0 10px rgba(244, 63, 94, 0.8); }
         .neon-text-magic { text-shadow: 0 0 10px rgba(167, 139, 250, 0.8); }
-        select { background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 20 20'%3E%3Cpath stroke='%2322d3ee' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E"); background-position: right .5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+        select { background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2322d3ee' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E"); background-position: right .5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem; -webkit-appearance: none; -moz-appearance: none; appearance: none; }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-200 p-4 font-mono min-h-screen relative">
@@ -89,7 +89,6 @@
             const [errorMsg, setErrorMsg] = useState("");
             const [copyStatus, setCopyStatus] = useState('');
 
-            // データ取得
             useEffect(() => {
                 fetch(API_URL)
                     .then(response => response.json())
@@ -121,19 +120,7 @@
                     });
             }, []);
 
-            // 【新機能】天候と馬場コンディションの連動
-            const handleWeatherChange = (newWeather) => {
-                setWeather(newWeather);
-                // 天候に応じた馬場コンディションのオート設定
-                if (newWeather === 'rainy') {
-                    setCond(3); // 雨ならタフ
-                } else if (newWeather === 'cloudy') {
-                    setCond(2); // 曇りなら標準
-                } else if (newWeather === 'sunny') {
-                    setCond(1); // 晴れなら高速
-                    setWeatherRecovery(false); // 晴れなら復活フラグもオフ
-                }
-            };
+            useEffect(() => { if (weather === 'sunny') setWeatherRecovery(false); }, [weather]);
 
             const getRecoveredBias = (currentCourse) => {
                 if (currentCourse === 1) return 1;
@@ -184,7 +171,6 @@
                 return result.sort((a, b) => b.score - a.score);
             }, [horses, weather, bias, pace, cond, course, raceType, weatherRecovery]);
 
-            // 自動選択
             useEffect(() => {
                 if (calculatedHorses.length > 0 && selectedHorseId === null) {
                     setSelectedHorseId(calculatedHorses[0].no);
@@ -216,9 +202,9 @@
 
             if (isLoading) {
                 return (
-                    <div className="min-h-screen flex items-center justify-center bg-slate-950 flex-col text-cyan-400 font-bold tracking-widest animate-pulse">
+                    <div className="min-h-screen flex items-center justify-center bg-slate-950 flex-col">
                         <div className="w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                        CONNECTING...
+                        <div className="text-cyan-400 font-bold tracking-widest animate-pulse">CONNECTING...</div>
                     </div>
                 );
             }
@@ -255,29 +241,67 @@
                         </p>
                     </header>
 
+                    {/* 確定情報パネル: レース名を程よい枠囲みに調整 */}
                     <div className="bg-slate-950 border border-cyan-700 p-3 md:p-4 rounded-lg mb-6 flex flex-wrap gap-3 items-center neon-border">
-                        <div className="bg-slate-800 px-3 py-1 rounded text-cyan-400 text-sm font-bold flex items-center shrink-0"><span className="text-[10px] text-slate-400 mr-1 font-normal">開催日:</span>{displayDate}</div>
-                        <div className="bg-slate-800 border border-cyan-500/50 px-3 py-1 rounded-md text-base md:text-xl font-black text-cyan-300 shadow-inner">{raceInfo.raceName}</div>
+                        <div className="bg-slate-800 border border-cyan-500/50 px-3 py-1 rounded-md text-base md:text-xl font-black text-cyan-300 shadow-inner">
+                            {raceInfo.raceName}
+                        </div>
+                        <div className="bg-slate-800 px-3 py-1 rounded text-cyan-400 text-sm font-bold flex items-center shrink-0">
+                            <span className="text-[10px] text-slate-400 mr-1 font-normal">開催日:</span>{displayDate}
+                        </div>
                         <div className="bg-slate-700 px-3 py-1 rounded text-xs text-slate-200 shrink-0">{raceInfo.location} {raceInfo.courseName}</div>
-                        <div className="bg-slate-800 border border-slate-600 px-3 py-1 rounded text-[10px] md:text-xs text-slate-300 flex items-center shrink-0">条件: {raceType === '3yo' ? "3歳若駒戦" : "古馬・標準G1"} <span className="ml-2 text-[10px] text-rose-400 border border-rose-400/50 bg-rose-900/20 px-1.5 py-0.5 rounded">🔒固定</span></div>
+                        <div className="bg-slate-800 border border-slate-600 px-3 py-1 rounded text-[10px] md:text-xs text-slate-300 flex items-center shrink-0">
+                            条件: {raceType === '3yo' ? "3歳若駒戦" : "古馬・標準G1"} <span className="ml-2 text-[10px] text-rose-400 border border-rose-400/50 bg-rose-900/20 px-1.5 py-0.5 rounded">🔒固定</span>
+                        </div>
                     </div>
 
                     <div className="mb-6 bg-slate-950 p-4 rounded-lg border border-cyan-900 relative overflow-hidden min-h-[260px] flex flex-col">
-                        <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm flex items-center">📊 詳細データ解析{selectedHorseData && <span className="ml-3 text-cyan-300 font-black">{selectedHorseData.frame}枠{selectedHorseId}番 {selectedHorseData.name}</span>}</h3>
+                        <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm flex items-center">
+                            📊 詳細データ解析
+                            {selectedHorseData && <span className="ml-3 text-cyan-300 font-black">{selectedHorseData.frame}枠{selectedHorseData.no}番 {selectedHorseData.name}</span>}
+                        </h3>
                         {selectedHorseData && (
                             <div className="flex flex-col md:flex-row gap-6 items-center">
-                                <div className="w-full md:w-1/2 flex justify-center items-center" style={{ minHeight: "220px" }}><NativeRadarChart data={radarData} /></div>
+                                <div className="w-full md:w-1/2 flex justify-center items-center" style={{ minHeight: "220px" }}>
+                                    <NativeRadarChart data={radarData} />
+                                </div>
                                 <div className="w-full md:w-1/2 text-sm text-slate-300 space-y-3">
                                     <div className="grid grid-cols-2 gap-3">
-                                        <div className="bg-slate-900 p-2 rounded border border-slate-800"><div className="text-[10px] text-slate-500">適合スコア</div><div className="text-3xl font-black text-cyan-400 neon-text-cyan">{selectedHorseData.score}</div></div>
-                                        <div className="bg-slate-900 p-2 rounded border border-slate-800"><div className="text-[10px] text-slate-500">基礎能力 (Base)</div><div className="text-2xl font-bold text-white">{selectedHorseData.baseScore}</div></div>
+                                        <div className="bg-slate-900 p-2 rounded border border-slate-800">
+                                            <div className="text-[10px] text-slate-500">適合スコア</div>
+                                            <div className="text-3xl font-black text-cyan-400 neon-text-cyan">{selectedHorseData.score}</div>
+                                        </div>
+                                        <div className="bg-slate-900 p-2 rounded border border-slate-800">
+                                            <div className="text-[10px] text-slate-500">基礎能力 (Base)</div>
+                                            <div className="text-2xl font-bold text-white">{selectedHorseData.baseScore}</div>
+                                        </div>
                                     </div>
                                     <ul className="space-y-1 text-xs">
-                                        <li className="flex justify-between border-b border-slate-800 pb-1"><span>上がりポテンシャル</span><span className="text-white font-bold">Lv.{selectedHorseData.spurt} {selectedHorseData.spurt >= 4 ? '(瞬発力型)' : '(消耗戦型)'}</span></li>
-                                        <li className="flex justify-between border-b border-slate-800 pb-1"><span>想定脚質 / 騎手</span><span className="text-white font-bold">{selectedHorseData.runStyle === 1 ? '逃げ' : selectedHorseData.runStyle === 2 ? '先行' : selectedHorseData.runStyle === 3 ? '差し' : '追込'} ({selectedHorseData.jockeyClass}級)</span></li>
+                                        <li className="flex justify-between border-b border-slate-800 pb-1">
+                                            <span>上がりポテンシャル</span>
+                                            <span className="text-white font-bold">Lv.{selectedHorseData.spurt} {selectedHorseData.spurt >= 4 ? '(瞬発力型)' : '(消耗戦型)'}</span>
+                                        </li>
+                                        <li className="flex justify-between border-b border-slate-800 pb-1">
+                                            <span>想定脚質 / 騎手</span>
+                                            <span className="text-white font-bold">
+                                                {selectedHorseData.runStyle === 1 ? '逃げ' : selectedHorseData.runStyle === 2 ? '先行' : selectedHorseData.runStyle === 3 ? '差し' : '追込'} ({selectedHorseData.jockeyClass}級)
+                                            </span>
+                                        </li>
                                     </ul>
-                                    {selectedHorseData.tags && selectedHorseData.tags.length > 0 && (<div className="flex flex-wrap gap-1 mt-1">{selectedHorseData.tags.map((tag, i) => (<span key={i} className="text-[10px] bg-cyan-900/30 border border-cyan-700/50 text-cyan-200 px-2 py-0.5 rounded">🏷️ {tag}</span>))}</div>)}
-                                    {selectedHorseData.alerts && selectedHorseData.alerts.length > 0 && (<div className="mt-2 pt-2 border-t border-slate-700/50 flex flex-col gap-1">{selectedHorseData.alerts.map((alert, i) => (<div key={i} className={`text-[11px] font-bold ${alert.type === 'magic' ? 'text-purple-400 neon-text-magic' : ''} ${alert.type === 'danger' ? 'text-rose-500 neon-text-alert animate-pulse' : ''} ${alert.type === 'warning' ? 'text-amber-500' : ''}`}>{alert.text}</div>))}</div>)}
+                                    {selectedHorseData.tags && selectedHorseData.tags.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            {selectedHorseData.tags.map((tag, i) => (<span key={i} className="text-[10px] bg-cyan-900/30 border border-cyan-700/50 text-cyan-200 px-2 py-0.5 rounded">🏷️ {tag}</span>))}
+                                        </div>
+                                    )}
+                                    {selectedHorseData.alerts && selectedHorseData.alerts.length > 0 && (
+                                        <div className="mt-2 pt-2 border-t border-slate-700/50 flex flex-col gap-1">
+                                            {selectedHorseData.alerts.map((alert, i) => (
+                                                <div key={i} className={`text-[11px] font-bold ${alert.type === 'magic' ? 'text-purple-400 neon-text-magic' : ''} ${alert.type === 'danger' ? 'text-rose-500 neon-text-alert animate-pulse' : ''} ${alert.type === 'warning' ? 'text-amber-500' : ''}`}>
+                                                    {alert.text}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -290,7 +314,10 @@
                                 <h3 className="text-rose-400 font-bold mb-4 text-sm">▶ 特殊ルールの強制適用</h3>
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between bg-slate-900 p-3 rounded border border-slate-800">
-                                        <div className="flex flex-col"><span className="text-xs font-bold text-slate-300">午後天候回復（物理復活）</span>{weather === 'sunny' ? <span className="text-[10px] text-slate-500 mt-1">※天候が曇り・雨の時のみ</span> : weatherRecovery && <span className="text-[10px] text-rose-400 font-bold mt-1">強制適用中</span>}</div>
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-bold text-slate-300">午後天候回復（物理復活）</span>
+                                            {weather === 'sunny' ? <span className="text-[10px] text-slate-500 mt-1">※天候が曇り・雨の時のみ</span> : weatherRecovery && <span className="text-[10px] text-rose-400 font-bold mt-1">強制適用中</span>}
+                                        </div>
                                         <button onClick={() => { if (weather !== 'sunny') setWeatherRecovery(!weatherRecovery); }} disabled={weather === 'sunny'} className={`w-12 h-6 rounded-full relative transition-colors ${weather === 'sunny' ? "bg-slate-800 opacity-50" : weatherRecovery ? "bg-rose-600" : "bg-slate-700"}`}><span className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${weatherRecovery ? "translate-x-6" : ""}`}></span></button>
                                     </div>
                                 </div>
@@ -299,7 +326,7 @@
                             <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 neon-border">
                                 <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm">▶ 馬場・展開の手動設定</h3>
                                 <div className="space-y-3">
-                                    <div><label className="block text-[10px] font-bold text-slate-400 mb-1">天候 (連動あり)</label><select value={weather} onChange={(e) => handleWeatherChange(e.target.value)} className="w-full bg-slate-800 text-cyan-300 text-xs font-bold border border-slate-700 rounded p-2 outline-none"><option value="sunny">晴れ</option><option value="cloudy">曇り</option><option value="rainy">雨</option></select></div>
+                                    <div><label className="block text-[10px] font-bold text-slate-400 mb-1">天候</label><select value={weather} onChange={(e) => setWeather(e.target.value)} className="w-full bg-slate-800 text-cyan-300 text-xs font-bold border border-slate-700 rounded p-2 outline-none"><option value="sunny">晴れ</option><option value="cloudy">曇り</option><option value="rainy">雨</option></select></div>
                                     <div><label className="block text-[10px] font-bold text-slate-400 mb-1">トラックバイアス</label><select value={weatherRecovery ? getRecoveredBias(course) : bias} onChange={(e) => setBias(Number(e.target.value))} disabled={weatherRecovery} className="w-full bg-slate-800 text-cyan-300 text-xs font-bold border border-slate-700 rounded p-2 outline-none disabled:opacity-50"><option value={1}>超インベタ</option><option value={2}>イン有利</option><option value={3}>フラット</option><option value={4}>外伸び</option><option value={5}>大外差し</option></select></div>
                                     <div><label className="block text-[10px] font-bold text-slate-400 mb-1">想定ペース</label><select value={pace} onChange={(e) => setPace(Number(e.target.value))} className="w-full bg-slate-800 text-cyan-300 text-xs font-bold border border-slate-700 rounded p-2 outline-none"><option value={1}>ドスロー</option><option value={2}>ミドル</option><option value={3}>ハイペース</option></select></div>
                                     <div><label className="block text-[10px] font-bold text-slate-400 mb-1">馬場コンディション</label><select value={cond} onChange={(e) => setCond(Number(e.target.value))} className="w-full bg-slate-800 text-cyan-300 text-xs font-bold border border-slate-700 rounded p-2 outline-none"><option value={1}>高速馬場 (良)</option><option value={2}>標準 (稍重)</option><option value={3}>タフ (重・不)</option></select></div>
@@ -318,9 +345,17 @@
                                         <div key={horse.no} onClick={() => setSelectedHorseId(horse.no)} className={`p-2.5 rounded border flex items-center justify-between transition-all cursor-pointer ${isSelected ? "bg-slate-800 neon-border-active z-10 relative" : isTop3 ? "bg-slate-800 border-cyan-500 neon-border" : "bg-slate-900 border-slate-800 opacity-80 hover:border-slate-600"}`}>
                                             <div className="flex items-center space-x-3 overflow-hidden">
                                                 <div className={`text-lg font-black ${rankColor} w-5 text-center shrink-0`}>{index + 1}</div>
-                                                <div className="flex items-center flex-wrap gap-x-2 gap-y-1"><span className="text-slate-400 text-[10px] border border-slate-600 px-1 rounded whitespace-nowrap">{horse.frame}枠{horse.no}番</span><span className="font-bold text-sm text-slate-100 truncate max-w-[120px] sm:max-w-none">{horse.name}</span><span className="text-[10px] text-slate-400 whitespace-nowrap">({horse.odds}倍)</span>{horse.alerts.length > 0 && <span className="text-[10px] ml-1" title="詳細レポートあり">📋</span>}</div>
+                                                <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+                                                    <span className="text-slate-400 text-[10px] border border-slate-600 px-1 rounded whitespace-nowrap">{horse.frame}枠{horse.no}番</span>
+                                                    <span className="font-bold text-sm text-slate-100 truncate max-w-[120px] sm:max-w-none">{horse.name}</span>
+                                                    <span className="text-[10px] text-slate-400 whitespace-nowrap">({horse.odds}倍)</span>
+                                                    {horse.alerts.length > 0 && <span className="text-[10px] ml-1" title="詳細レポートあり">📋</span>}
+                                                </div>
                                             </div>
-                                            <div className="flex items-center space-x-2 shrink-0 pl-2"><div className={`text-xl font-black ${isTop3 || isSelected ? 'text-cyan-400' : 'text-slate-500'}`}>{horse.score}</div><div className="text-[10px] text-cyan-500 w-4 text-center">{isSelected ? "◀" : ""}</div></div>
+                                            <div className="flex items-center space-x-2 shrink-0 pl-2">
+                                                <div className={`text-xl font-black ${isTop3 || isSelected ? 'text-cyan-400' : 'text-slate-500'}`}>{horse.score}</div>
+                                                <div className="text-[10px] text-cyan-500 w-4 text-center">{isSelected ? "◀" : ""}</div>
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -341,6 +376,7 @@
                 </div>
             );
         }
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
