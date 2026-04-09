@@ -26,7 +26,6 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
 
-        // あなたのGoogle Apps Script API URL
         const API_URL = "https://script.google.com/macros/s/AKfycbxV0f-VF_lw-FQjQ1S2WFUh06QkBRuST8z1SkqFNZ9xwYIGytG6DdCZ2qjVKYAxvxI5/exec";
 
         const AI_PROMPT = `これから、あなたの予想結果を外部のUIシミュレーターに流し込みます。
@@ -245,22 +244,26 @@
             return (
                 <div className="max-w-6xl mx-auto bg-slate-900 p-4 md:p-6 rounded-xl shadow-2xl border border-slate-800 relative mt-4 mb-12 pb-12">
                     <header className="mb-4">
-                        {/* タイトルのレスポンシブ調整（スマホでは小さく、折り返しに対応） */}
-                        <h1 className="text-lg sm:text-xl md:text-3xl font-black text-cyan-400 tracking-wider neon-text-cyan flex flex-wrap items-center gap-2">
-                            <span>🐴 黒マル式競馬予想シュミレーター</span>
-                            <span className="text-[10px] md:text-xs text-slate-500 border border-slate-600 px-2 py-0.5 rounded font-normal">公開版</span>
-                        </h1>
+                        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-3">
+                            <h1 className="text-lg sm:text-xl md:text-3xl font-black text-cyan-400 tracking-wider neon-text-cyan flex flex-wrap items-center gap-2">
+                                <span>🐴 黒マル式競馬予想シュミレーター</span>
+                                <span className="text-[10px] md:text-xs text-slate-500 border border-slate-600 px-2 py-0.5 rounded font-normal">公開版</span>
+                            </h1>
+                            <div className="inline-flex items-center">
+                                <span className="bg-slate-800 text-emerald-400 border border-emerald-700/50 px-3 py-1.5 rounded text-xs font-bold shadow-inner">
+                                    🔄 データ更新日：{raceInfo.updatedAt}
+                                </span>
+                            </div>
+                        </div>
                         <p className="text-xs text-slate-400 mt-3 leading-relaxed">
-                            ※当サイトの基本データは管理者のAI予想によって自動更新されます。
-                            <span className="inline-block bg-slate-800 text-emerald-400 border border-emerald-700/50 px-2 py-0.5 rounded mx-1 font-bold shadow-inner">
-                                更新日：{raceInfo.updatedAt}
-                            </span>
-                            ユーザーは自由にパラメーターを動かしてレース展開によるシミュレーションが可能です。
+                            ※当サイトの基本データは管理者のAI予想によって自動更新されます。ユーザーは自由にパラメーターを動かしてレース展開によるシミュレーションが可能です。
                         </p>
                     </header>
 
                     <div className="bg-slate-950 border border-cyan-700 p-3 md:p-4 rounded-lg mb-6 flex flex-wrap gap-2 md:gap-3 items-center neon-border">
-                        <div className="bg-slate-800 px-3 py-1.5 rounded text-cyan-400 text-sm font-bold">{raceInfo.date}</div>
+                        <div className="bg-slate-800 px-3 py-1.5 rounded text-cyan-400 text-sm font-bold flex items-center">
+                            <span className="text-[10px] text-slate-400 mr-1 font-normal">開催日:</span>{raceInfo.date}
+                        </div>
                         <div className="text-xl md:text-2xl font-black text-white px-2">{raceInfo.raceName}</div>
                         <div className="bg-slate-700 px-3 py-1.5 rounded text-xs text-slate-200">{raceInfo.location} {raceInfo.courseName}</div>
                         <div className="bg-slate-800 border border-slate-600 px-3 py-1.5 rounded text-xs text-slate-300 flex items-center">
@@ -285,4 +288,194 @@
                         ) : (
                             <div className="flex flex-col md:flex-row gap-6 items-center">
                                 <div className="w-full md:w-1/2 flex justify-center items-center" style={{ minHeight: "220px" }}>
-                                    <NativeRadar
+                                    <NativeRadarChart data={radarData} />
+                                </div>
+                                <div className="w-full md:w-1/2 text-sm text-slate-300 space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-slate-900 p-3 rounded border border-slate-800">
+                                            <div className="text-[10px] text-slate-500">適合スコア</div>
+                                            <div className="text-3xl font-black text-cyan-400 neon-text-cyan">{selectedHorseData.score}</div>
+                                        </div>
+                                        <div className="bg-slate-900 p-3 rounded border border-slate-800">
+                                            <div className="text-[10px] text-slate-500">基礎能力 (Base)</div>
+                                            <div className="text-2xl font-bold text-white">{selectedHorseData.baseScore}</div>
+                                        </div>
+                                    </div>
+                                    <ul className="space-y-2 text-xs">
+                                        <li className="flex justify-between border-b border-slate-800 pb-1">
+                                            <span>上がりポテンシャル</span>
+                                            <span className="text-white font-bold">Lv.{selectedHorseData.spurt} {selectedHorseData.spurt >= 4 ? '(瞬発力型)' : '(消耗戦型)'}</span>
+                                        </li>
+                                        <li className="flex justify-between border-b border-slate-800 pb-1">
+                                            <span>脚質想定</span>
+                                            <span className="text-white font-bold">{selectedHorseData.runStyle === 1 ? '逃げ' : selectedHorseData.runStyle === 2 ? '先行' : selectedHorseData.runStyle === 3 ? '差し' : '追込'}</span>
+                                        </li>
+                                        <li className="flex justify-between border-b border-slate-800 pb-1">
+                                            <span>騎手クラス</span>
+                                            <span className="text-white font-bold">
+                                                {selectedHorseData.jockeyClass}級 {selectedHorseData.specialJockey ? '(職人補正あり)' : ''}
+                                            </span>
+                                        </li>
+                                    </ul>
+                                    {selectedHorseData.tags && selectedHorseData.tags.length > 0 && (
+                                        <div className="flex flex-wrap gap-1">
+                                            {selectedHorseData.tags.map((tag, i) => (<span key={i} className="text-[10px] bg-slate-800 border border-slate-600 text-slate-300 px-2 py-1 rounded">🏷️ {tag}</span>))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        <div className="lg:col-span-4 space-y-6">
+                            <div className="bg-slate-950 p-4 rounded-lg border border-rose-900 neon-border-alert relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-full h-1 bg-rose-600"></div>
+                                <h3 className="text-rose-400 font-bold mb-4 text-sm">▶ MASTER_FLOW OVERRIDES</h3>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between bg-slate-900 p-3 rounded border border-slate-800">
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-bold text-slate-300">午後天候回復（物理復活）</span>
+                                            {weather === 'sunny' ? (
+                                                <span className="text-[10px] text-slate-500 mt-1">※天候が曇り・雨の時のみ使用可</span>
+                                            ) : (
+                                                weatherRecovery && <span className="text-[10px] text-rose-400 font-bold mt-1">強制適用中</span>
+                                            )}
+                                        </div>
+                                        <button 
+                                            onClick={() => { if (weather !== 'sunny') setWeatherRecovery(!weatherRecovery); }} 
+                                            disabled={weather === 'sunny'}
+                                            className={`w-12 h-6 rounded-full relative transition-colors ${weather === 'sunny' ? "bg-slate-800 cursor-not-allowed opacity-50" : weatherRecovery ? "bg-rose-600" : "bg-slate-700"}`}
+                                        >
+                                            <span className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${weatherRecovery ? "translate-x-6" : ""}`}></span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 neon-border">
+                                <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm">▶ ENVIRONMENT_PARAMS</h3>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">天候</label>
+                                        <select value={weather} onChange={(e) => setWeather(e.target.value)} className="w-full bg-slate-800 text-cyan-300 text-xs font-bold border border-slate-700 rounded p-2 outline-none">
+                                            <option value="sunny">晴れ</option><option value="cloudy">曇り</option><option value="rainy">雨</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">トラックバイアス {weatherRecovery && <span className="text-rose-400">(OVERRIDDEN)</span>}</label>
+                                        <select value={weatherRecovery ? getRecoveredBias(course) : bias} onChange={(e) => setBias(Number(e.target.value))} disabled={weatherRecovery} className="w-full bg-slate-800 text-cyan-300 text-xs font-bold border border-slate-700 rounded p-2 outline-none disabled:opacity-50">
+                                            <option value={1}>超インベタ</option><option value={2}>イン有利</option><option value={3}>フラット</option><option value={4}>外伸び</option><option value={5}>大外差し</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">想定ペース</label>
+                                        <select value={pace} onChange={(e) => setPace(Number(e.target.value))} className="w-full bg-slate-800 text-cyan-300 text-xs font-bold border border-slate-700 rounded p-2 outline-none">
+                                            <option value={1}>ドスロー</option><option value={2}>ミドル</option><option value={3}>ハイペース</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">馬場コンディション</label>
+                                        <select value={cond} onChange={(e) => setCond(Number(e.target.value))} className="w-full bg-slate-800 text-cyan-300 text-xs font-bold border border-slate-700 rounded p-2 outline-none">
+                                            <option value={1}>高速馬場 (良)</option><option value={2}>標準 (稍重)</option><option value={3}>タフ (重・不)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="lg:col-span-8">
+                            <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm">▶ PROFILING_OUTPUT (出走馬: {horses.length}頭)</h3>
+                            <div className="space-y-3">
+                                {calculatedHorses.map((horse, index) => {
+                                    const isTop3 = index < 3;
+                                    const isSelected = selectedHorseId === horse.no;
+                                    
+                                    let cardClass = "bg-slate-900 border-slate-800 opacity-80 hover:border-slate-600";
+                                    if (isSelected) {
+                                        cardClass = "bg-slate-800 neon-border-active z-10 relative";
+                                    } else if (isTop3) {
+                                        cardClass = "bg-slate-800 border-cyan-500 neon-border";
+                                    }
+
+                                    const rankColor = index === 0 ? "text-yellow-400" : index === 1 ? "text-slate-300" : index === 2 ? "text-amber-600" : "text-slate-600";
+                                    
+                                    return (
+                                        <div 
+                                            key={horse.no} 
+                                            onClick={() => setSelectedHorseId(horse.no)}
+                                            className={`p-4 rounded-lg border flex flex-col transition-all cursor-pointer ${cardClass}`}
+                                        >
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div className="flex items-center space-x-3">
+                                                    <div className={`text-xl font-black ${rankColor} w-5 text-center`}>{index + 1}</div>
+                                                    <div>
+                                                        <div className="text-base md:text-lg font-bold text-slate-100 flex items-center flex-wrap gap-1">
+                                                            <span className="text-slate-500 text-xs mr-1 border border-slate-600 px-1 rounded">{horse.frame}枠{horse.no}番</span>
+                                                            {horse.name}
+                                                            <span className="ml-1 text-[10px] text-slate-400">({horse.odds}倍)</span>
+                                                            <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded ${horse.jockeyClass === 'S' ? 'bg-purple-900 text-purple-300 border border-purple-500' : 'bg-slate-700 text-slate-400'}`}>
+                                                                {horse.jockeyClass}級
+                                                            </span>
+                                                            {horse.specialJockey && <span className="text-[10px] bg-indigo-900 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500">職人</span>}
+                                                            {!horse.isMarked && <span className="text-[10px] bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded border border-slate-700">消し</span>}
+                                                        </div>
+                                                        {horse.tags && horse.tags.length > 0 && (
+                                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                                {horse.tags.map((tag, i) => (<span key={i} className="text-[9px] bg-slate-800 border border-slate-600 text-slate-400 px-1 rounded">🏷️ {tag}</span>))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col items-end">
+                                                    <div className={`text-3xl font-black ${isTop3 || isSelected ? 'text-cyan-400 neon-text-cyan' : 'text-slate-500'}`}>{horse.score}</div>
+                                                    <div className="text-[10px] text-cyan-500 mt-1 flex items-center">
+                                                        {isSelected ? "● 表示中" : "🔍 タップして解析"}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {horse.alerts.length > 0 && (
+                                                <div className="mt-2 pt-2 border-t border-slate-700/50 flex flex-col gap-1">
+                                                    {horse.alerts.map((alert, i) => (
+                                                        <div key={i} className={`text-xs font-bold ${alert.type === 'magic' ? 'text-purple-400 neon-text-magic' : ''} ${alert.type === 'danger' ? 'text-rose-500 neon-text-alert animate-pulse' : ''} ${alert.type === 'warning' ? 'text-amber-500' : ''}`}>{alert.text}</div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* 免責事項エリア */}
+                    <div className="mt-8 bg-slate-900 p-5 rounded-lg border border-slate-800 text-xs text-slate-400 leading-relaxed">
+                        <h4 className="text-slate-300 font-bold mb-3 flex items-center text-sm">
+                            <span className="mr-2">⚠️</span> 本シミュレーターのご利用に関する注意事項（免責事項）
+                        </h4>
+                        <ul className="list-disc pl-5 space-y-2">
+                            <li><strong>本ツールの性質について：</strong>本シミュレーターは、管理者が複数の競馬情報サイト等の公開データを独自に分析し、個人の見解とロジックに基づいてスコアリングを行った「非公式の個人制作ツール」です。</li>
+                            <li><strong>情報の正確性について：</strong>表示されている出走馬データ、想定オッズ、トラックバイアス、適合スコアなどの正確性・最新性を完全に保証するものではありません。実際のオッズや天候・馬場状態、出走取消などの確定情報は、必ずJRA（日本中央競馬会）などの公式発表をご確認ください。</li>
+                            <li><strong>自己責任の原則：</strong>本ツールが算出する「適合スコア」は、あくまでレース展開を想定するためのシミュレーション上の参考値であり、馬券の的中や利益を約束・保証するものではありません。馬券の購入は必ず【ユーザー様ご自身の判断と自己責任】で行っていただきますようお願いいたします。</li>
+                            <li><strong>免責事項：</strong>本ツールの利用、または利用できなかったことによって生じたいかなる損害・損失・トラブルにつきましても、管理者は一切の責任を負いかねます。あらかじめご了承の上、レース展開の可能性を多角的に検討し、競馬予想を楽しむためのエンターテイメント・ツールとしてご活用ください。</li>
+                        </ul>
+                    </div>
+
+                    <div className="absolute bottom-4 right-4">
+                        <button 
+                            onClick={handleCopyPrompt} 
+                            className="text-[10px] text-slate-800 hover:text-slate-500 transition-colors font-mono"
+                        >
+                            {copyStatus ? copyStatus : "🔒 Admin"}
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
