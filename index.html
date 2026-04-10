@@ -106,7 +106,6 @@
             const [selectedHorseId, setSelectedHorseId] = useState(null);
             
             const [manualWeightDiffs, setManualWeightDiffs] = useState({});
-            
             const [customPredictions, setCustomPredictions] = useState([null, null, null, null]);
             const [isCustomPrediction, setIsCustomPrediction] = useState(false);
 
@@ -248,13 +247,24 @@
                         else { alerts.push({ text: "💣 +10kg超: 太め残りの危険性あり", type: "danger" }); score -= 10; }
                     }
                     
+                    // ★ 過去のタグ（◯◯ジョーカー等）が混ざっていても自動変換して解釈する絶対防御
+                    let processedTags = [];
                     if (Array.isArray(horse.tags)) {
-                        if (horse.tags.includes("内枠・先行適性◎") && effectiveBias <= 2 && pace === 1) { score += 20; alerts.push({ text: "🚨 イン前優位条件に完全合致", type: "danger" }); }
-                        if (horse.tags.includes("ハイペース消耗戦適性◎") && pace === 3) { score += 20; alerts.push({ text: "🚨 厳しい消耗戦で能力全開", type: "warning" }); }
+                        processedTags = horse.tags.map(t => {
+                            if (t.includes("インベタ")) return "内枠・先行適性◎";
+                            if (t.includes("ジョーカー")) return "ハイペース消耗戦適性◎";
+                            return t;
+                        });
+                        processedTags = [...new Set(processedTags)]; // 重複削除
+                        
+                        if (processedTags.includes("内枠・先行適性◎") && effectiveBias <= 2 && pace === 1) { score += 20; alerts.push({ text: "🚨 イン前優位条件に完全合致", type: "danger" }); }
+                        if (processedTags.includes("ハイペース消耗戦適性◎") && pace === 3) { score += 20; alerts.push({ text: "🚨 厳しい消耗戦で能力全開", type: "warning" }); }
                     }
                     
-                    score = Math.min(100, Math.max(0, Math.round(score)));
-                    return { ...horse, score, alerts, isMagicJockey };
+                    // ★ 100点の上限（カンスト）を撤廃。上限なしの青天井にする（下限は0）
+                    score = Math.max(0, Math.round(score));
+                    
+                    return { ...horse, tags: processedTags, score, alerts, isMagicJockey };
                 });
 
                 let sorted = result.sort((a, b) => b.score - a.score);
