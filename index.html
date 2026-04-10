@@ -88,6 +88,9 @@
         const getPaceText = (v) => v === 1 ? "ドスロー" : v === 2 ? "ミドル" : "ハイペース";
         const getCondText = (v) => v === 1 ? "高速(良)" : v === 2 ? "標準(稍重)" : "タフ(重不)";
         const getBiasText = (v) => v === 1 ? "超イン" : v === 2 ? "イン有利" : v === 3 ? "フラット" : v === 4 ? "外伸び" : "大外差し";
+        
+        // ★ 騎手クラスを信頼度テキストに変換するヘルパー関数
+        const getJockeyReliabilityText = (v) => v === 'S' ? "信頼度:特大" : v === 'A' ? "信頼度:高" : v === 'B' ? "信頼度:標準" : "信頼度:-";
 
         function App() {
             const [allRacesData, setAllRacesData] = useState([]);
@@ -247,7 +250,6 @@
                         else { alerts.push({ text: "💣 +10kg超: 太め残りの危険性あり", type: "danger" }); score -= 10; }
                     }
                     
-                    // ★ 過去のタグ（◯◯ジョーカー等）が混ざっていても自動変換して解釈する絶対防御
                     let processedTags = [];
                     if (Array.isArray(horse.tags)) {
                         processedTags = horse.tags.map(t => {
@@ -255,13 +257,12 @@
                             if (t.includes("ジョーカー")) return "ハイペース消耗戦適性◎";
                             return t;
                         });
-                        processedTags = [...new Set(processedTags)]; // 重複削除
+                        processedTags = [...new Set(processedTags)]; 
                         
                         if (processedTags.includes("内枠・先行適性◎") && effectiveBias <= 2 && pace === 1) { score += 20; alerts.push({ text: "🚨 イン前優位条件に完全合致", type: "danger" }); }
                         if (processedTags.includes("ハイペース消耗戦適性◎") && pace === 3) { score += 20; alerts.push({ text: "🚨 厳しい消耗戦で能力全開", type: "warning" }); }
                     }
                     
-                    // ★ 100点の上限（カンスト）を撤廃。上限なしの青天井にする（下限は0）
                     score = Math.max(0, Math.round(score));
                     
                     return { ...horse, tags: processedTags, score, alerts, isMagicJockey };
@@ -413,7 +414,8 @@
                                     </div>
                                     <ul className="space-y-1 text-xs mb-2 border-b border-slate-800 pb-2">
                                         <li className="flex justify-between pb-1"><span>上がりポテンシャル</span><span className="text-white font-bold">Lv.{selectedHorseData.spurt || 3} {(selectedHorseData.spurt || 3) >= 4 ? '(瞬発力型)' : '(消耗戦型)'}</span></li>
-                                        <li className="flex justify-between pb-1"><span>想定脚質 / 騎手</span><span className="text-white font-bold">{selectedHorseData.runStyle === 1 ? '逃げ' : selectedHorseData.runStyle === 2 ? '先行' : selectedHorseData.runStyle === 3 ? '差し' : '追込'} ({selectedHorseData.jockeyClass || '-'}級)</span></li>
+                                        {/* ★ 騎手クラスを「信頼度」テキストで表示 */}
+                                        <li className="flex justify-between pb-1"><span>想定脚質 / 騎手</span><span className="text-white font-bold">{selectedHorseData.runStyle === 1 ? '逃げ' : selectedHorseData.runStyle === 2 ? '先行' : selectedHorseData.runStyle === 3 ? '差し' : '追込'} ({getJockeyReliabilityText(selectedHorseData.jockeyClass)})</span></li>
                                     </ul>
                                     <div className="mt-2 p-2 bg-slate-800/60 border border-slate-700 rounded text-[11px]">
                                         <div className="text-emerald-400 font-bold mb-1 flex items-center text-[10px]">💡 激走シナリオ（能力最大化条件）</div>
