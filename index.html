@@ -41,7 +41,7 @@
 【重要：出力形式について】
 スプレッドシートの1つのセルにそのまま貼り付けられるように、JSONの改行やインデント（空白）をすべて削除し、完全に「1行の文字列（Minified JSON）」として出力してください。
 
-{"race":{"updatedAt":"2026/04/09","date":"2026/04/12","raceName":"桜花賞(G1)","location":"阪神","courseName":"芝1600m (外回り)","raceType":"3yo","course":3,"weather":"sunny","bias":3,"pace":2,"cond":2},"horses":[{"no":1,"name":"馬の名前","frame":1,"runStyle":2,"odds":5.5,"baseScore":65,"optBias":3,"optPace":2,"optCond":2,"optCourse":2,"spurt":3,"jockeyClass":"A","specialJockey":true,"popularity":3,"weightDiff":0,"isTransport":true,"tags":["内枠・先行適性◎"],"isMarked":true}]}
+{"race":{"updatedAt":"2026/04/09","date":"2026/04/12","raceName":"桜花賞(G1)","location":"阪神","courseName":"芝1600m (外回り)","raceType":"3yo","course":3,"weather":"sunny","bias":3,"pace":2,"cond":2},"horses":[{"no":1,"name":"馬の名前","frame":1,"runStyle":2,"odds":5.5,"baseScore":65,"optBias":3,"optPace":2,"optCond":2,"optCourse":2,"spurt":3,"jockeyName":"川田将雅","jockeyClass":"A","specialJockey":true,"popularity":3,"weightDiff":0,"isTransport":true,"tags":["内枠・先行適性◎"],"isMarked":true}]}
 
 【各項目のルール】
 [race]
@@ -51,6 +51,7 @@
 * raceType: "older"(古馬・標準戦) または "3yo"(3歳若駒戦) ※確定情報
 
 [horses]
+* jockeyName: 騎乗予定の騎手名（フルネームまたは一般的な表記）
 * weightDiff: 想定される馬体重増減（不明な場合は0）
 * isTransport: 関東馬が関西で走るような長距離遠征リスクがある場合はtrue、それ以外はfalse
 * tags: 特殊能力のタグ配列。一般的に伝わる表現にすること（例：["内枠・先行適性◎", "ハイペース消耗戦適性◎", "道悪巧者", "瞬発力特化型"]）`;
@@ -89,8 +90,7 @@
         const getCondText = (v) => v === 1 ? "高速(良)" : v === 2 ? "標準(稍重)" : "タフ(重不)";
         const getBiasText = (v) => v === 1 ? "超イン" : v === 2 ? "イン有利" : v === 3 ? "フラット" : v === 4 ? "外伸び" : "大外差し";
         
-        // ★ 騎手クラスを信頼度テキストに変換するヘルパー関数
-        const getJockeyReliabilityText = (v) => v === 'S' ? "信頼度:特大" : v === 'A' ? "信頼度:高" : v === 'B' ? "信頼度:標準" : "信頼度:-";
+        const getJockeyReliabilityText = (v) => v === 'S' ? "特大" : v === 'A' ? "高" : v === 'B' ? "標準" : "-";
 
         function App() {
             const [allRacesData, setAllRacesData] = useState([]);
@@ -328,14 +328,14 @@
                     text = `【${raceInfo.raceName} 私の予想印】\n\n`;
                     customPredictions.forEach((horseNo, idx) => {
                         const h = horses.find(h => h.no === horseNo);
-                        if (h) text += `${marks[idx]} ${h.name}\n`;
+                        if (h) text += `${marks[idx]} [${h.frame}枠${h.no}番] ${h.name}\n`;
                     });
                 } else {
                     text = `【${raceInfo.raceName} シミュレーション結果】\n`;
                     text += `${weatherIcon}${getPaceText(pace)}・${getCondText(cond)}想定なら…\n\n`;
                     const topHorses = calculatedHorses.slice(0, 4);
                     topHorses.forEach((h, idx) => {
-                        text += `${marks[idx]} ${h.name} (スコア:${h.score})\n`;
+                        text += `${marks[idx]} [${h.frame}枠${h.no}番] ${h.name} (スコア:${h.score})\n`;
                     });
                 }
                 
@@ -400,9 +400,6 @@
                         <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm flex items-center">
                             📊 詳細データ解析
                             {selectedHorseData && <span className="ml-3 text-cyan-300 font-black">{selectedHorseData.frame}枠{selectedHorseId}番 {selectedHorseData.name}</span>}
-                            {selectedHorseData && selectedHorseData.isTransport && (
-                                <span className="ml-2 text-[10px] bg-slate-800 border border-slate-600 text-slate-300 px-2 py-0.5 rounded">✈️ 長距離輸送あり</span>
-                            )}
                         </h3>
                         {selectedHorseData && (
                             <div className="flex flex-col md:flex-row gap-6 items-center">
@@ -413,9 +410,9 @@
                                         <div className="bg-slate-900 p-2 rounded border border-slate-800"><div className="text-[10px] text-slate-500">基礎能力 (Base)</div><div className="text-2xl font-bold text-white">{selectedHorseData.baseScore}</div></div>
                                     </div>
                                     <ul className="space-y-1 text-xs mb-2 border-b border-slate-800 pb-2">
-                                        <li className="flex justify-between pb-1"><span>上がりポテンシャル</span><span className="text-white font-bold">Lv.{selectedHorseData.spurt || 3} {(selectedHorseData.spurt || 3) >= 4 ? '(瞬発力型)' : '(消耗戦型)'}</span></li>
-                                        {/* ★ 騎手クラスを「信頼度」テキストで表示 */}
-                                        <li className="flex justify-between pb-1"><span>想定脚質 / 騎手</span><span className="text-white font-bold">{selectedHorseData.runStyle === 1 ? '逃げ' : selectedHorseData.runStyle === 2 ? '先行' : selectedHorseData.runStyle === 3 ? '差し' : '追込'} ({getJockeyReliabilityText(selectedHorseData.jockeyClass)})</span></li>
+                                        <li className="flex justify-between pb-1"><span>上がりポテンシャル</span><span className="text-white font-bold">{(selectedHorseData.spurt || 3) >= 4 ? '瞬発力型' : '消耗戦型'} (Lv.{selectedHorseData.spurt || 3})</span></li>
+                                        <li className="flex justify-between pb-1"><span>想定脚質 / 騎手</span><span className="text-white font-bold">{selectedHorseData.runStyle === 1 ? '逃げ' : selectedHorseData.runStyle === 2 ? '先行' : selectedHorseData.runStyle === 3 ? '差し' : '追込'} / {selectedHorseData.jockeyName || '未定'}</span></li>
+                                        <li className="flex justify-between pb-1"><span>騎手信頼度</span><span className={`font-bold ${selectedHorseData.jockeyClass === 'S' ? 'text-yellow-400' : selectedHorseData.jockeyClass === 'A' ? 'text-emerald-400' : 'text-slate-300'}`}>{getJockeyReliabilityText(selectedHorseData.jockeyClass)}</span></li>
                                     </ul>
                                     <div className="mt-2 p-2 bg-slate-800/60 border border-slate-700 rounded text-[11px]">
                                         <div className="text-emerald-400 font-bold mb-1 flex items-center text-[10px]">💡 激走シナリオ（能力最大化条件）</div>
@@ -425,7 +422,17 @@
                                             <div className="bg-slate-900 py-1 rounded border border-slate-700/50"><span className="text-slate-500 block text-[8px]">バイアス</span><span className="text-slate-200 font-bold">{getBiasText(selectedHorseData.optBias || 3)}</span></div>
                                         </div>
                                     </div>
-                                    {Array.isArray(selectedHorseData.tags) && selectedHorseData.tags.length > 0 && (<div className="flex flex-wrap gap-1 mt-2">{selectedHorseData.tags.map((tag, i) => (<span key={i} className="text-[10px] bg-cyan-900/30 border border-cyan-700/50 text-cyan-200 px-2 py-0.5 rounded">🏷️ {tag}</span>))}</div>)}
+                                    {/* ★ 長距離輸送バッジをタグエリアに移動 */}
+                                    {( (Array.isArray(selectedHorseData.tags) && selectedHorseData.tags.length > 0) || selectedHorseData.isTransport ) && (
+                                        <div className="flex flex-wrap gap-1 mt-2">
+                                            {selectedHorseData.isTransport && (
+                                                <span className="text-[10px] bg-slate-800 border border-slate-600 text-slate-300 px-2 py-0.5 rounded shadow-sm">✈️ 長距離輸送あり</span>
+                                            )}
+                                            {Array.isArray(selectedHorseData.tags) && selectedHorseData.tags.map((tag, i) => (
+                                                <span key={i} className="text-[10px] bg-cyan-900/30 border border-cyan-700/50 text-cyan-200 px-2 py-0.5 rounded">🏷️ {tag}</span>
+                                            ))}
+                                        </div>
+                                    )}
                                     {Array.isArray(selectedHorseData.alerts) && selectedHorseData.alerts.length > 0 && (<div className="mt-2 pt-2 border-t border-slate-700/50 flex flex-col gap-1">{selectedHorseData.alerts.map((alert, i) => (<div key={i} className={`text-[11px] font-bold ${alert.type === 'magic' ? 'text-purple-400 neon-text-magic' : ''} ${alert.type === 'danger' ? 'text-rose-500 neon-text-alert animate-pulse' : ''} ${alert.type === 'warning' ? 'text-amber-500' : ''}`}>{alert.text}</div>))}</div>)}
                                 </div>
                             </div>
@@ -480,6 +487,8 @@
                                                     <span className="text-slate-400 text-[10px] border border-slate-600 px-1 rounded whitespace-nowrap">{horse.frame}枠{horse.no}番</span>
                                                     <span className="font-bold text-sm text-slate-100 truncate max-w-[120px] sm:max-w-none">{horse.name}</span>
                                                     <span className="text-[10px] text-slate-400 whitespace-nowrap">({horse.odds}倍)</span>
+                                                    {/* ★ ランキング一覧に長距離輸送マークを追加 */}
+                                                    {horse.isTransport && <span className="text-[10px]" title="長距離輸送あり">✈️</span>}
                                                     {horse.alerts && horse.alerts.length > 0 && <span className="text-[10px] ml-1">📋</span>}
                                                 </div>
                                             </div>
@@ -518,7 +527,7 @@
                                                 className={`bg-slate-800 text-[10px] sm:text-xs text-white p-1 rounded border outline-none cursor-pointer ${isCustomPrediction ? 'border-cyan-700' : 'border-slate-600'}`}
                                             >
                                                 <option value="" disabled>選択...</option>
-                                                {horses.map(h => <option key={h.no} value={h.no}>{h.name}</option>)}
+                                                {horses.map(h => <option key={h.no} value={h.no}>{h.frame}枠{h.no}番 {h.name}</option>)}
                                             </select>
                                         </div>
                                     ))}
