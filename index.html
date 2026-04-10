@@ -480,4 +480,87 @@
                                 {calculatedHorses.map((horse, index) => {
                                     const isTop3 = horse.rank <= 3;
                                     const isSelected = selectedHorseId === horse.no;
-                                    const rankBadgeColor = horse.rank === 1 ? "text-yellow-400" : horse.rank === 2 ? "text-slate-300" : horse.rank === 3 ? "text-amber-600" : "text-
+                                    const rankBadgeColor = horse.rank === 1 ? "text-yellow-400" : horse.rank === 2 ? "text-slate-300" : horse.rank === 3 ? "text-amber-600" : "text-slate-600";
+                                    let cardClass = "bg-slate-900 border-slate-800 opacity-80 hover:border-slate-600";
+                                    if (isSelected) cardClass = "bg-slate-800 border-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)] z-10 relative";
+                                    else if (isTop3) cardClass = "bg-slate-800 neon-border-gold";
+
+                                    return (
+                                        <div key={horse.no} onClick={() => setSelectedHorseId(horse.no)} className={`p-2.5 rounded border flex items-center justify-between transition-all cursor-pointer ${cardClass}`}>
+                                            <div className="flex items-center space-x-3 overflow-hidden">
+                                                <div className={`text-lg font-black ${rankBadgeColor} w-6 text-center shrink-0`}>{horse.rank}</div>
+                                                <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+                                                    <span className="text-slate-400 text-[10px] border border-slate-600 px-1 rounded whitespace-nowrap">{horse.frame}枠{horse.no}番</span>
+                                                    <span className="font-bold text-sm text-slate-100 truncate max-w-[120px] sm:max-w-none">{horse.name}</span>
+                                                    <span className="text-[10px] text-slate-400 whitespace-nowrap">({horse.odds}倍)</span>
+                                                    {horse.isTransport && <span className="text-[10px]" title="長距離輸送あり">✈️</span>}
+                                                    {horse.alerts && horse.alerts.length > 0 && <span className="text-[10px] ml-1">📋</span>}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center space-x-2 shrink-0 pl-2">
+                                                <div className="flex flex-col items-center mr-2 opacity-90 hover:opacity-100 transition-opacity">
+                                                    <span className="text-[8px] text-slate-400 mb-0.5">大幅増減</span>
+                                                    <div className="flex gap-0.5 sm:gap-1">
+                                                        <button onClick={(e)=>{e.stopPropagation(); toggleWeight(horse.no, 10)}} className={`text-[8px] sm:text-[9px] leading-none px-1 py-1 rounded border transition-colors ${manualWeightDiffs[horse.no] === 10 ? 'bg-rose-900 text-rose-300 border-rose-500 font-bold shadow-[0_0_5px_rgba(244,63,94,0.5)]' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>+10以上</button>
+                                                        <button onClick={(e)=>{e.stopPropagation(); toggleWeight(horse.no, -10)}} className={`text-[8px] sm:text-[9px] leading-none px-1 py-1 rounded border transition-colors ${manualWeightDiffs[horse.no] === -10 ? 'bg-blue-900 text-blue-300 border-blue-500 font-bold shadow-[0_0_5px_rgba(59,130,246,0.5)]' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>-10以下</button>
+                                                    </div>
+                                                </div>
+                                                <div className={`text-xl font-black ${isSelected ? 'text-cyan-400' : isTop3 ? 'text-yellow-500' : 'text-slate-500'}`}>{horse.score}</div>
+                                                <div className="text-[10px] text-cyan-500 w-4 text-center">{isSelected ? "◀" : ""}</div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-700 mb-4 shadow-inner">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-xs font-bold text-slate-300 flex items-center">✍️ SNSシェア用 予想印</span>
+                                    {isCustomPrediction && (
+                                        <button onClick={resetCustomPrediction} className="text-[9px] text-cyan-400 hover:text-cyan-300 border border-cyan-800/50 bg-slate-800 px-2 py-0.5 rounded transition-colors">
+                                            🔄 シミュレーション評価順に戻す
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {['◎', '◯', '▲', '△'].map((mark, i) => (
+                                        <div key={mark} className="flex flex-col">
+                                            <span className={`text-[10px] font-bold text-center mb-1 ${i === 0 ? 'text-rose-400' : i === 1 ? 'text-blue-400' : i === 2 ? 'text-emerald-400' : 'text-slate-400'}`}>{mark}</span>
+                                            <select 
+                                                value={customPredictions[i] || ''} 
+                                                onChange={(e) => handleCustomPredictionChange(i, e.target.value)}
+                                                className={`bg-slate-800 text-[10px] sm:text-xs text-white p-1 rounded border outline-none cursor-pointer ${isCustomPrediction ? 'border-cyan-700' : 'border-slate-600'}`}
+                                            >
+                                                <option value="" disabled>選択...</option>
+                                                {horses.map(h => <option key={h.no} value={h.no}>{h.frame}枠{h.no}番 {h.name}</option>)}
+                                            </select>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <button onClick={shareToX} className="w-full bg-slate-100 hover:bg-white text-slate-950 font-black py-3 rounded-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 shadow-lg">
+                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                                {isCustomPrediction ? "私の予想印をXでシェアする" : "この展開シミュレーション結果をシェアする"}
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div className="mt-8 bg-slate-900 p-5 rounded-lg border border-slate-800 text-xs text-slate-400 leading-relaxed">
+                        <h4 className="text-slate-300 font-bold mb-3 flex items-center text-sm"><span className="mr-2">⚠️</span> 本シミュレーターのご利用に関する注意事項（免責事項）</h4>
+                        <ul className="list-disc pl-5 space-y-2">
+                            <li><strong>本ツールの性質について：</strong>本シミュレーターは、管理者が複数の競馬情報サイト等の公開データを独自に分析し、個人の見解とロジックに基づいてスコアリングを行った「非公式の個人制作ツール」です。</li>
+                            <li><strong>情報の正確性について：</strong>表示されている出走馬データ、想定オッズ、適合スコアなどの正確性・最新性を完全に保証するものではありません。実際の確定情報は、必ずJRA等の公式発表をご確認ください。</li>
+                            <li><strong>自己責任の原則：</strong>本ツールが算出する「適合スコア」は、あくまでレース展開を想定するためのシミュレーション上の参考値であり、馬券の購入は必ずご自身の判断と自己責任で行ってください。</li>
+                            <li><strong>免責事項：</strong>本ツールの利用によって生じたいかなる損害につきましても、管理者は一切の責任を負いかねます。</li>
+                        </ul>
+                    </div>
+                    <div className="absolute bottom-4 right-4"><button onClick={handleCopyPrompt} className="text-[10px] text-slate-800 hover:text-slate-500 transition-colors font-mono">{copyStatus ? copyStatus : "🔒 Admin"}</button></div>
+                </div>
+            );
+        }
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
