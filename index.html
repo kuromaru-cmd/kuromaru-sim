@@ -308,21 +308,18 @@
                 ];
             }, [selectedHorseData]);
 
-            // SNSシェア時のテキスト変更
             const shareToX = () => {
                 const weatherIcon = weather === 'rainy' ? '☔' : weather === 'cloudy' ? '☁️' : '☀️';
                 let text = "";
                 const marks = ['◎', '◯', '▲', '△'];
 
                 if (isCustomPrediction) {
-                    // ★ 手動変更ありの場合（非常にシンプルな文言）
                     text = `【${raceInfo.raceName} 私の予想印】\n\n`;
                     customPredictions.forEach((horseNo, idx) => {
                         const h = horses.find(h => h.no === horseNo);
                         if (h) text += `${marks[idx]} ${h.name}\n`;
                     });
                 } else {
-                    // デフォルトの場合（シミュレーション結果）
                     text = `【${raceInfo.raceName} シミュレーション結果】\n`;
                     text += `${weatherIcon}${getPaceText(pace)}・${getCondText(cond)}想定なら…\n\n`;
                     const topHorses = calculatedHorses.slice(0, 4);
@@ -450,7 +447,10 @@
                         </div>
 
                         <div className="lg:col-span-8">
-                            <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm flex justify-between">▶ 総合評価ランキング</h3>
+                            <div className="border-b border-slate-800 pb-2 mb-4">
+                                <h3 className="text-emerald-400 font-bold text-sm">▶ 総合評価ランキング</h3>
+                                <p className="text-[10px] text-slate-500 mt-1">※直前の馬体重発表で<strong className="text-slate-400">±10kg以上の大幅な増減</strong>があった場合は、各馬の右端ボタンで補正してください。</p>
+                            </div>
                             <div className="space-y-2 mb-4">
                                 {calculatedHorses.map((horse, index) => {
                                     const isTop3 = horse.rank <= 3;
@@ -472,9 +472,12 @@
                                                 </div>
                                             </div>
                                             <div className="flex items-center space-x-2 shrink-0 pl-2">
-                                                <div className="flex flex-col items-center mr-2 space-y-0.5 opacity-80 hover:opacity-100 transition-opacity">
-                                                    <button onClick={(e)=>{e.stopPropagation(); toggleWeight(horse.no, 10)}} className={`text-[8px] leading-none px-1.5 py-0.5 rounded border transition-colors ${manualWeightDiffs[horse.no] === 10 ? 'bg-rose-900 text-rose-300 border-rose-500 font-bold shadow-[0_0_5px_rgba(244,63,94,0.5)]' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>+10</button>
-                                                    <button onClick={(e)=>{e.stopPropagation(); toggleWeight(horse.no, -10)}} className={`text-[8px] leading-none px-1.5 py-0.5 rounded border transition-colors ${manualWeightDiffs[horse.no] === -10 ? 'bg-blue-900 text-blue-300 border-blue-500 font-bold shadow-[0_0_5px_rgba(59,130,246,0.5)]' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>-10</button>
+                                                <div className="flex flex-col items-center mr-2 opacity-90 hover:opacity-100 transition-opacity">
+                                                    <span className="text-[8px] text-slate-400 mb-0.5">大幅増減</span>
+                                                    <div className="flex gap-0.5 sm:gap-1">
+                                                        <button onClick={(e)=>{e.stopPropagation(); toggleWeight(horse.no, 10)}} className={`text-[8px] sm:text-[9px] leading-none px-1 py-1 rounded border transition-colors ${manualWeightDiffs[horse.no] === 10 ? 'bg-rose-900 text-rose-300 border-rose-500 font-bold shadow-[0_0_5px_rgba(244,63,94,0.5)]' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>+10以上</button>
+                                                        <button onClick={(e)=>{e.stopPropagation(); toggleWeight(horse.no, -10)}} className={`text-[8px] sm:text-[9px] leading-none px-1 py-1 rounded border transition-colors ${manualWeightDiffs[horse.no] === -10 ? 'bg-blue-900 text-blue-300 border-blue-500 font-bold shadow-[0_0_5px_rgba(59,130,246,0.5)]' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>-10以下</button>
+                                                    </div>
                                                 </div>
                                                 <div className={`text-xl font-black ${isSelected ? 'text-cyan-400' : isTop3 ? 'text-yellow-500' : 'text-slate-500'}`}>{horse.score}</div>
                                                 <div className="text-[10px] text-cyan-500 w-4 text-center">{isSelected ? "◀" : ""}</div>
