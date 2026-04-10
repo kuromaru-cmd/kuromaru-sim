@@ -41,7 +41,7 @@
 【重要：出力形式について】
 スプレッドシートの1つのセルにそのまま貼り付けられるように、JSONの改行やインデント（空白）をすべて削除し、完全に「1行の文字列（Minified JSON）」として出力してください。
 
-{"race":{"updatedAt":"2026/04/09","date":"2026/04/12","raceName":"桜花賞(G1)","location":"阪神","courseName":"芝1600m (外回り)","raceType":"3yo","course":3,"weather":"sunny","bias":3,"pace":2,"cond":2},"horses":[{"no":1,"name":"馬の名前","frame":1,"runStyle":2,"odds":5.5,"baseScore":65,"optBias":3,"optPace":2,"optCond":2,"optCourse":2,"spurt":3,"jockeyName":"川田将雅","jockeyClass":"A","specialJockey":true,"popularity":3,"weightDiff":0,"isTransport":true,"tags":["内枠・先行適性◎"],"isMarked":true}]}
+{"race":{"updatedAt":"2026/04/09","date":"2026/04/12","raceName":"桜花賞(G1)","location":"阪神","courseName":"芝1600m (外回り)","raceType":"3yo","course":3,"weather":"sunny","bias":3,"pace":2,"cond":2},"horses":[{"no":1,"name":"馬の名前","frame":1,"runStyle":2,"odds":5.5,"baseScore":65,"optBias":3,"optPace":2,"optCond":2,"optCourse":2,"spurt":3,"jockeyName":"川田将雅","jockeyClass":"A","specialJockey":true,"popularity":3,"weightDiff":0,"isTransport":true,"sire":"キズナ","dam":"アパパネ","pedigreeApt":"A","tags":["内枠・先行適性◎"],"isMarked":true}]}
 
 【各項目のルール】
 [race]
@@ -54,6 +54,9 @@
 * jockeyName: 騎乗予定の騎手名（フルネームまたは一般的な表記）
 * weightDiff: 想定される馬体重増減（不明な場合は0）
 * isTransport: 関東馬が関西で走るような長距離遠征リスクがある場合はtrue、それ以外はfalse
+* sire: 父馬の名前
+* dam: 母馬の名前
+* pedigreeApt: 血統面から見た当レースへの適性評価（S, A, B）
 * tags: 特殊能力のタグ配列。一般的に伝わる表現にすること（例：["内枠・先行適性◎", "ハイペース消耗戦適性◎", "道悪巧者", "瞬発力特化型"]）`;
 
         const NativeRadarChart = ({ data }) => {
@@ -90,6 +93,7 @@
         const getCondText = (v) => v === 1 ? "高速(良)" : v === 2 ? "標準(稍重)" : "タフ(重不)";
         const getBiasText = (v) => v === 1 ? "超イン" : v === 2 ? "イン有利" : v === 3 ? "フラット" : v === 4 ? "外伸び" : "大外差し";
         
+        // ★ 鞍上期待度（騎手適性）のテキスト変換
         const getJockeyReliabilityText = (v) => v === 'S' ? "特大" : v === 'A' ? "高" : v === 'B' ? "標準" : "-";
 
         function App() {
@@ -412,7 +416,10 @@
                                     <ul className="space-y-1 text-xs mb-2 border-b border-slate-800 pb-2">
                                         <li className="flex justify-between pb-1"><span>上がりポテンシャル</span><span className="text-white font-bold">{(selectedHorseData.spurt || 3) >= 4 ? '瞬発力型' : '消耗戦型'} (Lv.{selectedHorseData.spurt || 3})</span></li>
                                         <li className="flex justify-between pb-1"><span>想定脚質 / 騎手</span><span className="text-white font-bold">{selectedHorseData.runStyle === 1 ? '逃げ' : selectedHorseData.runStyle === 2 ? '先行' : selectedHorseData.runStyle === 3 ? '差し' : '追込'} / {selectedHorseData.jockeyName || '未定'}</span></li>
-                                        <li className="flex justify-between pb-1"><span>騎手信頼度</span><span className={`font-bold ${selectedHorseData.jockeyClass === 'S' ? 'text-yellow-400' : selectedHorseData.jockeyClass === 'A' ? 'text-emerald-400' : 'text-slate-300'}`}>{getJockeyReliabilityText(selectedHorseData.jockeyClass)}</span></li>
+                                        <li className="flex justify-between pb-1"><span>鞍上期待度</span><span className={`font-bold ${selectedHorseData.jockeyClass === 'S' ? 'text-yellow-400' : selectedHorseData.jockeyClass === 'A' ? 'text-emerald-400' : 'text-slate-300'}`}>{getJockeyReliabilityText(selectedHorseData.jockeyClass)}</span></li>
+                                        {/* ★ 血統情報の表示を追加 */}
+                                        <li className="flex justify-between pb-1"><span>血統 (父 / 母)</span><span className="text-white font-bold text-[10px] sm:text-xs text-right max-w-[160px]">{selectedHorseData.sire || '不明'} / {selectedHorseData.dam || '不明'}</span></li>
+                                        <li className="flex justify-between pb-1"><span>血統適性</span><span className={`font-bold ${selectedHorseData.pedigreeApt === 'S' ? 'text-yellow-400' : selectedHorseData.pedigreeApt === 'A' ? 'text-emerald-400' : 'text-slate-300'}`}>{selectedHorseData.pedigreeApt ? `評価 ${selectedHorseData.pedigreeApt}` : '-'}</span></li>
                                     </ul>
                                     <div className="mt-2 p-2 bg-slate-800/60 border border-slate-700 rounded text-[11px]">
                                         <div className="text-emerald-400 font-bold mb-1 flex items-center text-[10px]">💡 激走シナリオ（能力最大化条件）</div>
@@ -422,7 +429,6 @@
                                             <div className="bg-slate-900 py-1 rounded border border-slate-700/50"><span className="text-slate-500 block text-[8px]">バイアス</span><span className="text-slate-200 font-bold">{getBiasText(selectedHorseData.optBias || 3)}</span></div>
                                         </div>
                                     </div>
-                                    {/* ★ 長距離輸送バッジをタグエリアに移動 */}
                                     {( (Array.isArray(selectedHorseData.tags) && selectedHorseData.tags.length > 0) || selectedHorseData.isTransport ) && (
                                         <div className="flex flex-wrap gap-1 mt-2">
                                             {selectedHorseData.isTransport && (
@@ -474,88 +480,4 @@
                                 {calculatedHorses.map((horse, index) => {
                                     const isTop3 = horse.rank <= 3;
                                     const isSelected = selectedHorseId === horse.no;
-                                    const rankBadgeColor = horse.rank === 1 ? "text-yellow-400" : horse.rank === 2 ? "text-slate-300" : horse.rank === 3 ? "text-amber-600" : "text-slate-600";
-                                    let cardClass = "bg-slate-900 border-slate-800 opacity-80 hover:border-slate-600";
-                                    if (isSelected) cardClass = "bg-slate-800 border-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)] z-10 relative";
-                                    else if (isTop3) cardClass = "bg-slate-800 neon-border-gold";
-
-                                    return (
-                                        <div key={horse.no} onClick={() => setSelectedHorseId(horse.no)} className={`p-2.5 rounded border flex items-center justify-between transition-all cursor-pointer ${cardClass}`}>
-                                            <div className="flex items-center space-x-3 overflow-hidden">
-                                                <div className={`text-lg font-black ${rankBadgeColor} w-6 text-center shrink-0`}>{horse.rank}</div>
-                                                <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
-                                                    <span className="text-slate-400 text-[10px] border border-slate-600 px-1 rounded whitespace-nowrap">{horse.frame}枠{horse.no}番</span>
-                                                    <span className="font-bold text-sm text-slate-100 truncate max-w-[120px] sm:max-w-none">{horse.name}</span>
-                                                    <span className="text-[10px] text-slate-400 whitespace-nowrap">({horse.odds}倍)</span>
-                                                    {/* ★ ランキング一覧に長距離輸送マークを追加 */}
-                                                    {horse.isTransport && <span className="text-[10px]" title="長距離輸送あり">✈️</span>}
-                                                    {horse.alerts && horse.alerts.length > 0 && <span className="text-[10px] ml-1">📋</span>}
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center space-x-2 shrink-0 pl-2">
-                                                <div className="flex flex-col items-center mr-2 opacity-90 hover:opacity-100 transition-opacity">
-                                                    <span className="text-[8px] text-slate-400 mb-0.5">大幅増減</span>
-                                                    <div className="flex gap-0.5 sm:gap-1">
-                                                        <button onClick={(e)=>{e.stopPropagation(); toggleWeight(horse.no, 10)}} className={`text-[8px] sm:text-[9px] leading-none px-1 py-1 rounded border transition-colors ${manualWeightDiffs[horse.no] === 10 ? 'bg-rose-900 text-rose-300 border-rose-500 font-bold shadow-[0_0_5px_rgba(244,63,94,0.5)]' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>+10以上</button>
-                                                        <button onClick={(e)=>{e.stopPropagation(); toggleWeight(horse.no, -10)}} className={`text-[8px] sm:text-[9px] leading-none px-1 py-1 rounded border transition-colors ${manualWeightDiffs[horse.no] === -10 ? 'bg-blue-900 text-blue-300 border-blue-500 font-bold shadow-[0_0_5px_rgba(59,130,246,0.5)]' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>-10以下</button>
-                                                    </div>
-                                                </div>
-                                                <div className={`text-xl font-black ${isSelected ? 'text-cyan-400' : isTop3 ? 'text-yellow-500' : 'text-slate-500'}`}>{horse.score}</div>
-                                                <div className="text-[10px] text-cyan-500 w-4 text-center">{isSelected ? "◀" : ""}</div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-700 mb-4 shadow-inner">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="text-xs font-bold text-slate-300 flex items-center">✍️ SNSシェア用 予想印</span>
-                                    {isCustomPrediction && (
-                                        <button onClick={resetCustomPrediction} className="text-[9px] text-cyan-400 hover:text-cyan-300 border border-cyan-800/50 bg-slate-800 px-2 py-0.5 rounded transition-colors">
-                                            🔄 シミュレーション評価順に戻す
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="grid grid-cols-4 gap-2">
-                                    {['◎', '◯', '▲', '△'].map((mark, i) => (
-                                        <div key={mark} className="flex flex-col">
-                                            <span className={`text-[10px] font-bold text-center mb-1 ${i === 0 ? 'text-rose-400' : i === 1 ? 'text-blue-400' : i === 2 ? 'text-emerald-400' : 'text-slate-400'}`}>{mark}</span>
-                                            <select 
-                                                value={customPredictions[i] || ''} 
-                                                onChange={(e) => handleCustomPredictionChange(i, e.target.value)}
-                                                className={`bg-slate-800 text-[10px] sm:text-xs text-white p-1 rounded border outline-none cursor-pointer ${isCustomPrediction ? 'border-cyan-700' : 'border-slate-600'}`}
-                                            >
-                                                <option value="" disabled>選択...</option>
-                                                {horses.map(h => <option key={h.no} value={h.no}>{h.frame}枠{h.no}番 {h.name}</option>)}
-                                            </select>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <button onClick={shareToX} className="w-full bg-slate-100 hover:bg-white text-slate-950 font-black py-3 rounded-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 shadow-lg">
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                                {isCustomPrediction ? "私の予想印をXでシェアする" : "この展開シミュレーション結果をシェアする"}
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div className="mt-8 bg-slate-900 p-5 rounded-lg border border-slate-800 text-xs text-slate-400 leading-relaxed">
-                        <h4 className="text-slate-300 font-bold mb-3 flex items-center text-sm"><span className="mr-2">⚠️</span> 本シミュレーターのご利用に関する注意事項（免責事項）</h4>
-                        <ul className="list-disc pl-5 space-y-2">
-                            <li><strong>本ツールの性質について：</strong>本シミュレーターは、管理者が複数の競馬情報サイト等の公開データを独自に分析し、個人の見解とロジックに基づいてスコアリングを行った「非公式の個人制作ツール」です。</li>
-                            <li><strong>情報の正確性について：</strong>表示されている出走馬データ、想定オッズ、適合スコアなどの正確性・最新性を完全に保証するものではありません。実際の確定情報は、必ずJRA等の公式発表をご確認ください。</li>
-                            <li><strong>自己責任の原則：</strong>本ツールが算出する「適合スコア」は、あくまでレース展開を想定するためのシミュレーション上の参考値であり、馬券の購入は必ずご自身の判断と自己責任で行ってください。</li>
-                            <li><strong>免責事項：</strong>本ツールの利用によって生じたいかなる損害につきましても、管理者は一切の責任を負いかねます。</li>
-                        </ul>
-                    </div>
-                    <div className="absolute bottom-4 right-4"><button onClick={handleCopyPrompt} className="text-[10px] text-slate-800 hover:text-slate-500 transition-colors font-mono">{copyStatus ? copyStatus : "🔒 Admin"}</button></div>
-                </div>
-            );
-        }
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+                                    const rankBadgeColor = horse.rank === 1 ? "text-yellow-400" : horse.rank === 2 ? "text-slate-300" : horse.rank === 3 ? "text-amber-600" : "text-
