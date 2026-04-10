@@ -41,7 +41,7 @@
 【重要：出力形式について】
 スプレッドシートの1つのセルにそのまま貼り付けられるように、JSONの改行やインデント（空白）をすべて削除し、完全に「1行の文字列（Minified JSON）」として出力してください。
 
-{"race":{"updatedAt":"2026/04/09","date":"2026/04/12","raceName":"桜花賞(G1)","location":"阪神","courseName":"芝1600m (外回り)","raceType":"3yo","course":3,"weather":"sunny","bias":3,"pace":2,"cond":2},"horses":[{"no":1,"name":"馬の名前","frame":1,"runStyle":2,"odds":5.5,"baseScore":65,"optBias":3,"optPace":2,"optCond":2,"optCourse":2,"spurt":3,"jockeyClass":"A","specialJockey":true,"popularity":3,"weightDiff":0,"tags":["内枠・先行適性◎"],"isMarked":true}]}
+{"race":{"updatedAt":"2026/04/09","date":"2026/04/12","raceName":"桜花賞(G1)","location":"阪神","courseName":"芝1600m (外回り)","raceType":"3yo","course":3,"weather":"sunny","bias":3,"pace":2,"cond":2},"horses":[{"no":1,"name":"馬の名前","frame":1,"runStyle":2,"odds":5.5,"baseScore":65,"optBias":3,"optPace":2,"optCond":2,"optCourse":2,"spurt":3,"jockeyClass":"A","specialJockey":true,"popularity":3,"weightDiff":0,"isTransport":true,"tags":["内枠・先行適性◎"],"isMarked":true}]}
 
 【各項目のルール】
 [race]
@@ -51,6 +51,8 @@
 * raceType: "older"(古馬・標準戦) または "3yo"(3歳若駒戦) ※確定情報
 
 [horses]
+* weightDiff: 想定される馬体重増減（不明な場合は0）
+* isTransport: 関東馬が関西で走るような長距離遠征リスクがある場合はtrue、それ以外はfalse
 * tags: 特殊能力のタグ配列。一般的に伝わる表現にすること（例：["内枠・先行適性◎", "ハイペース消耗戦適性◎", "道悪巧者", "瞬発力特化型"]）`;
 
         const NativeRadarChart = ({ data }) => {
@@ -93,6 +95,7 @@
             const [horses, setHorses] = useState([]);
             const [raceInfo, setRaceInfo] = useState({ date: "読込中...", raceName: "データ取得中", location: "-", courseName: "-", updatedAt: "----/--/--" });
             const [originalSettings, setOriginalSettings] = useState(null);
+            
             const [weather, setWeather] = useState('sunny');
             const [bias, setBias] = useState(3);
             const [pace, setPace] = useState(2);
@@ -101,11 +104,16 @@
             const [raceType, setRaceType] = useState('older');
             const [weatherRecovery, setWeatherRecovery] = useState(false);
             const [selectedHorseId, setSelectedHorseId] = useState(null);
+            
+            const [manualWeightDiffs, setManualWeightDiffs] = useState({});
+            
+            const [customPredictions, setCustomPredictions] = useState([null, null, null, null]);
+            const [isCustomPrediction, setIsCustomPrediction] = useState(false);
+
             const [isLoading, setIsLoading] = useState(true);
             const [errorMsg, setErrorMsg] = useState("");
             const [copyStatus, setCopyStatus] = useState('');
 
-            // データ読み込み時の絶対防御（エラーハンドリング）を追加
             const loadRaceData = (parsedData) => {
                 if (!parsedData || !parsedData.race || !parsedData.horses) return;
 
@@ -135,16 +143,15 @@
                 setOriginalSettings({ weather: aiWeather, bias: aiBias, pace: aiPace, cond: aiCond });
                 setWeatherRecovery(false); 
                 setSelectedHorseId(null);
+                setManualWeightDiffs({});
+                setIsCustomPrediction(false); 
             };
 
-            // API取得時に不完全なJSONを弾くロジックを強化
             useEffect(() => {
                 fetch(API_URL)
                     .then(response => response.json())
                     .then(parsedData => {
                         let validRaces = [];
-                        
-                        // 不完全なデータを自動的に除外する
                         if (Array.isArray(parsedData)) {
                             validRaces = parsedData.filter(d => d && d.race && d.horses && Array.isArray(d.horses));
                         } else if (parsedData && parsedData.race && parsedData.horses && Array.isArray(parsedData.horses)) {
@@ -156,7 +163,7 @@
                             loadRaceData(validRaces[0]); 
                             setIsLoading(false);
                         } else {
-                            setErrorMsg("スプレッドシートのデータ形式が正しくありません。（raceやhorsesの項目が欠けている可能性があります）"); 
+                            setErrorMsg("スプレッドシートのデータ形式が正しくありません。"); 
                             setIsLoading(false);
                         }
                     })
@@ -179,10 +186,23 @@
                 else if (newWeather === 'sunny') { setCond(1); setWeatherRecovery(false); }
             };
 
+            const toggleWeight = (horseNo, val) => {
+                setManualWeightDiffs(prev => {
+                    if (prev[horseNo] === val) {
+                        const newState = { ...prev };
+                        delete newState[horseNo];
+                        return newState;
+                    } else {
+                        return { ...prev, [horseNo]: val };
+                    }
+                });
+            };
+
             const resetToAI = () => {
                 if (originalSettings) {
                     setWeather(originalSettings.weather); setBias(originalSettings.bias);
                     setPace(originalSettings.pace); setCond(originalSettings.cond); setWeatherRecovery(false);
+                    setManualWeightDiffs({});
                 }
             };
 
@@ -201,6 +221,8 @@
                     let biasDiff = Math.abs((horse.optBias || 3) - effectiveBias);
                     const isMagicJockey = horse.jockeyClass === 'S' || horse.specialJockey === true;
                     
+                    const currentWeightDiff = manualWeightDiffs[horse.no] !== undefined ? manualWeightDiffs[horse.no] : (horse.weightDiff || 0);
+
                     if (weather === 'sunny' && cond === 1 && horse.frame >= 8) { biasDiff *= 0.5; alerts.push({ text: "☀️ 天候連動: 外枠不利を軽減", type: "magic" }); }
                     if (isMagicJockey && biasDiff > 1) { biasDiff = 1; alerts.push({ text: "✨ 名手/職人補正: バイアス不利無効化", type: "magic" }); }
                     
@@ -216,12 +238,21 @@
                         } else if (isMagicJockey) { alerts.push({ text: "✨ 魔法/職人芸 (スタミナ温存)", type: "magic" }); score += 10; }
                     } else if (pace === 1 && isMagicJockey) { alerts.push({ text: "✨ 魔法/職人芸 (展開支配)", type: "magic" }); score += 10; }
                     
-                    if (horse.weightDiff <= -10) alerts.push({ text: "🚨 -10kg超: 究極仕上げ or 危険", type: "warning" });
+                    if (currentWeightDiff <= -10) {
+                        if (isMagicJockey) { alerts.push({ text: "✨ -10kg超: 究極仕上げ (名手の魔法で枯渇回避)", type: "magic" }); score += 5; } 
+                        else if (horse.isTransport) { alerts.push({ text: "⚠️ -10kg超: 長距離輸送による想定減 (許容範囲)", type: "warning" }); score -= 5; } 
+                        else { alerts.push({ text: "🚨 -10kg超: 輸送なしでの大幅減 (肉体の枯渇・危険)", type: "danger" }); score -= 15; }
+                    } else if (currentWeightDiff >= 10) {
+                        if (raceType === '3yo') { alerts.push({ text: "✨ +10kg超: 成長分 (骨格・パワーの増強)", type: "magic" }); score += 5; } 
+                        else if (cond === 3) { alerts.push({ text: "💪 +10kg超: 重馬場適合のパワー装甲", type: "magic" }); score += 5; } 
+                        else { alerts.push({ text: "💣 +10kg超: 太め残りの危険性あり", type: "danger" }); score -= 10; }
+                    }
                     
                     if (Array.isArray(horse.tags)) {
                         if (horse.tags.includes("内枠・先行適性◎") && effectiveBias <= 2 && pace === 1) { score += 20; alerts.push({ text: "🚨 イン前優位条件に完全合致", type: "danger" }); }
                         if (horse.tags.includes("ハイペース消耗戦適性◎") && pace === 3) { score += 20; alerts.push({ text: "🚨 厳しい消耗戦で能力全開", type: "warning" }); }
                     }
+                    
                     score = Math.min(100, Math.max(0, Math.round(score)));
                     return { ...horse, score, alerts, isMagicJockey };
                 });
@@ -231,14 +262,31 @@
                 return sorted.map((horse, index) => {
                     if (horse.score !== previousScore) currentRank = index + 1;
                     previousScore = horse.score;
-                    let symbol = "";
-                    if (currentRank === 1) symbol = "◎";
-                    else if (currentRank === 2) symbol = "◯";
-                    else if (currentRank === 3) symbol = "▲";
-                    else if (currentRank <= 4) symbol = "△";
-                    return { ...horse, rank: currentRank, symbol: symbol };
+                    return { ...horse, rank: currentRank };
                 });
-            }, [horses, weather, bias, pace, cond, course, raceType, weatherRecovery]);
+            }, [horses, weather, bias, pace, cond, course, raceType, weatherRecovery, manualWeightDiffs]);
+
+            useEffect(() => {
+                if (!isCustomPrediction && calculatedHorses.length >= 4) {
+                    setCustomPredictions([
+                        calculatedHorses[0].no,
+                        calculatedHorses[1].no,
+                        calculatedHorses[2].no,
+                        calculatedHorses[3].no
+                    ]);
+                }
+            }, [calculatedHorses, isCustomPrediction]);
+
+            const handleCustomPredictionChange = (index, value) => {
+                setIsCustomPrediction(true);
+                const newPredictions = [...customPredictions];
+                newPredictions[index] = Number(value);
+                setCustomPredictions(newPredictions);
+            };
+
+            const resetCustomPrediction = () => {
+                setIsCustomPrediction(false);
+            };
 
             useEffect(() => {
                 if (calculatedHorses.length > 0 && selectedHorseId === null) setSelectedHorseId(calculatedHorses[0].no);
@@ -260,15 +308,30 @@
                 ];
             }, [selectedHorseData]);
 
+            // SNSシェア時のテキスト変更
             const shareToX = () => {
                 const weatherIcon = weather === 'rainy' ? '☔' : weather === 'cloudy' ? '☁️' : '☀️';
-                const topHorses = calculatedHorses.slice(0, 4);
-                let text = `【${raceInfo.raceName} シミュレーション結果】\n`;
-                text += `${weatherIcon}${getPaceText(pace)}・${getCondText(cond)}想定なら…\n\n`;
-                topHorses.forEach(h => {
-                    text += `${h.symbol}${h.name} (スコア:${h.score})\n`;
-                });
-                text += `\n黒マル式競馬予想シュミレーターで解析中！\n`;
+                let text = "";
+                const marks = ['◎', '◯', '▲', '△'];
+
+                if (isCustomPrediction) {
+                    // ★ 手動変更ありの場合（非常にシンプルな文言）
+                    text = `【${raceInfo.raceName} 私の予想印】\n\n`;
+                    customPredictions.forEach((horseNo, idx) => {
+                        const h = horses.find(h => h.no === horseNo);
+                        if (h) text += `${marks[idx]} ${h.name}\n`;
+                    });
+                } else {
+                    // デフォルトの場合（シミュレーション結果）
+                    text = `【${raceInfo.raceName} シミュレーション結果】\n`;
+                    text += `${weatherIcon}${getPaceText(pace)}・${getCondText(cond)}想定なら…\n\n`;
+                    const topHorses = calculatedHorses.slice(0, 4);
+                    topHorses.forEach((h, idx) => {
+                        text += `${marks[idx]} ${h.name} (スコア:${h.score})\n`;
+                    });
+                }
+                
+                text += `\n黒マル式競馬予想シュミレーター\n`;
                 const url = window.location.href;
                 const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
                 window.open(xUrl, '_blank');
@@ -292,7 +355,6 @@
                 </div>
             );
 
-            // 日付表示の安全処理
             const displayDate = typeof raceInfo.date === 'string' ? raceInfo.date.replace(/-/g, '/') : "----/--/--";
 
             return (
@@ -327,7 +389,13 @@
                     </div>
 
                     <div className="mb-6 bg-slate-950 p-4 rounded-lg border border-cyan-900 relative overflow-hidden min-h-[260px] flex flex-col">
-                        <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm flex items-center">📊 詳細データ解析{selectedHorseData && <span className="ml-3 text-cyan-300 font-black">{selectedHorseData.frame}枠{selectedHorseId}番 {selectedHorseData.name}</span>}</h3>
+                        <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm flex items-center">
+                            📊 詳細データ解析
+                            {selectedHorseData && <span className="ml-3 text-cyan-300 font-black">{selectedHorseData.frame}枠{selectedHorseId}番 {selectedHorseData.name}</span>}
+                            {selectedHorseData && selectedHorseData.isTransport && (
+                                <span className="ml-2 text-[10px] bg-slate-800 border border-slate-600 text-slate-300 px-2 py-0.5 rounded">✈️ 長距離輸送あり</span>
+                            )}
+                        </h3>
                         {selectedHorseData && (
                             <div className="flex flex-col md:flex-row gap-6 items-center">
                                 <div className="w-full md:w-1/2 flex justify-center items-center" style={{ minHeight: "220px" }}><NativeRadarChart data={radarData} /></div>
@@ -382,8 +450,8 @@
                         </div>
 
                         <div className="lg:col-span-8">
-                            <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm flex justify-between">▶ 総合評価ランキング <span>◎◯▲△</span></h3>
-                            <div className="space-y-2 mb-6">
+                            <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm flex justify-between">▶ 総合評価ランキング</h3>
+                            <div className="space-y-2 mb-4">
                                 {calculatedHorses.map((horse, index) => {
                                     const isTop3 = horse.rank <= 3;
                                     const isSelected = selectedHorseId === horse.no;
@@ -395,10 +463,19 @@
                                     return (
                                         <div key={horse.no} onClick={() => setSelectedHorseId(horse.no)} className={`p-2.5 rounded border flex items-center justify-between transition-all cursor-pointer ${cardClass}`}>
                                             <div className="flex items-center space-x-3 overflow-hidden">
-                                                <div className={`text-lg font-black ${rankBadgeColor} w-6 text-center shrink-0`}>{horse.symbol || horse.rank}</div>
-                                                <div className="flex items-center flex-wrap gap-x-2 gap-y-1"><span className="text-slate-400 text-[10px] border border-slate-600 px-1 rounded whitespace-nowrap">{horse.frame}枠{horse.no}番</span><span className="font-bold text-sm text-slate-100 truncate max-w-[120px] sm:max-w-none">{horse.name}</span><span className="text-[10px] text-slate-400 whitespace-nowrap">({horse.odds}倍)</span>{horse.alerts && horse.alerts.length > 0 && <span className="text-[10px] ml-1">📋</span>}</div>
+                                                <div className={`text-lg font-black ${rankBadgeColor} w-6 text-center shrink-0`}>{horse.rank}</div>
+                                                <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+                                                    <span className="text-slate-400 text-[10px] border border-slate-600 px-1 rounded whitespace-nowrap">{horse.frame}枠{horse.no}番</span>
+                                                    <span className="font-bold text-sm text-slate-100 truncate max-w-[120px] sm:max-w-none">{horse.name}</span>
+                                                    <span className="text-[10px] text-slate-400 whitespace-nowrap">({horse.odds}倍)</span>
+                                                    {horse.alerts && horse.alerts.length > 0 && <span className="text-[10px] ml-1">📋</span>}
+                                                </div>
                                             </div>
                                             <div className="flex items-center space-x-2 shrink-0 pl-2">
+                                                <div className="flex flex-col items-center mr-2 space-y-0.5 opacity-80 hover:opacity-100 transition-opacity">
+                                                    <button onClick={(e)=>{e.stopPropagation(); toggleWeight(horse.no, 10)}} className={`text-[8px] leading-none px-1.5 py-0.5 rounded border transition-colors ${manualWeightDiffs[horse.no] === 10 ? 'bg-rose-900 text-rose-300 border-rose-500 font-bold shadow-[0_0_5px_rgba(244,63,94,0.5)]' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>+10</button>
+                                                    <button onClick={(e)=>{e.stopPropagation(); toggleWeight(horse.no, -10)}} className={`text-[8px] leading-none px-1.5 py-0.5 rounded border transition-colors ${manualWeightDiffs[horse.no] === -10 ? 'bg-blue-900 text-blue-300 border-blue-500 font-bold shadow-[0_0_5px_rgba(59,130,246,0.5)]' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>-10</button>
+                                                </div>
                                                 <div className={`text-xl font-black ${isSelected ? 'text-cyan-400' : isTop3 ? 'text-yellow-500' : 'text-slate-500'}`}>{horse.score}</div>
                                                 <div className="text-[10px] text-cyan-500 w-4 text-center">{isSelected ? "◀" : ""}</div>
                                             </div>
@@ -406,9 +483,36 @@
                                     );
                                 })}
                             </div>
+
+                            <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-700 mb-4 shadow-inner">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-xs font-bold text-slate-300 flex items-center">✍️ SNSシェア用 予想印</span>
+                                    {isCustomPrediction && (
+                                        <button onClick={resetCustomPrediction} className="text-[9px] text-cyan-400 hover:text-cyan-300 border border-cyan-800/50 bg-slate-800 px-2 py-0.5 rounded transition-colors">
+                                            🔄 シミュレーション評価順に戻す
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {['◎', '◯', '▲', '△'].map((mark, i) => (
+                                        <div key={mark} className="flex flex-col">
+                                            <span className={`text-[10px] font-bold text-center mb-1 ${i === 0 ? 'text-rose-400' : i === 1 ? 'text-blue-400' : i === 2 ? 'text-emerald-400' : 'text-slate-400'}`}>{mark}</span>
+                                            <select 
+                                                value={customPredictions[i] || ''} 
+                                                onChange={(e) => handleCustomPredictionChange(i, e.target.value)}
+                                                className={`bg-slate-800 text-[10px] sm:text-xs text-white p-1 rounded border outline-none cursor-pointer ${isCustomPrediction ? 'border-cyan-700' : 'border-slate-600'}`}
+                                            >
+                                                <option value="" disabled>選択...</option>
+                                                {horses.map(h => <option key={h.no} value={h.no}>{h.name}</option>)}
+                                            </select>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
                             <button onClick={shareToX} className="w-full bg-slate-100 hover:bg-white text-slate-950 font-black py-3 rounded-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 shadow-lg">
                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                                この展開での予想をXでシェアする
+                                {isCustomPrediction ? "私の予想印をXでシェアする" : "この展開シミュレーション結果をシェアする"}
                             </button>
                         </div>
                     </div>
