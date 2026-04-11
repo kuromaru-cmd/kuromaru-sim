@@ -227,12 +227,15 @@
                     
                     const currentWeightDiff = manualWeightDiffs[horse.no] !== undefined ? manualWeightDiffs[horse.no] : (horse.weightDiff || 0);
 
-                    // 天候と職人補正
                     if (weather === 'sunny' && cond === 1 && horse.frame >= 8) { biasDiff *= 0.5; alerts.push({ text: "☀️ 天候連動: 外枠不利を軽減", type: "magic" }); }
                     if (isMagicJockey && biasDiff > 1) { biasDiff = 1; alerts.push({ text: "✨ 名手/職人補正: バイアス不利無効化", type: "magic" }); }
                     
-                    // ★ 【追加要件2】内枠 × 上位騎手のバイアス適応バフ
-                    if (effectiveBias === 1 && horse.frame >= 1 && horse.frame <= 4 && (horse.jockeyClass === 'S' || horse.jockeyClass === 'A')) {
+                    // OMEGA 3.0 オーバードライブ・プロトコル
+                    if (pace === 1 && horse.runStyle === 1) {
+                        score += 15;
+                        alerts.push({ text: "🏎️ 展開支配: スロー逃げ特権発動 (+15)", type: "magic" });
+                    }
+                    if (effectiveBias === 1 && horse.frame <= 4 && (horse.jockeyClass === 'S' || horse.jockeyClass === 'A')) {
                         biasDiff *= 0.5;
                         alerts.push({ text: "🛡️ 騎手手腕: インベタ適応バフ (減点半減)", type: "warning" });
                     }
@@ -243,13 +246,6 @@
                     score += (2 - Math.abs((horse.optCond || 2) - cond)) * 5;
                     score += (2 - Math.abs((horse.optCourse || 3) - course)) * 4;
                     
-                    // ★ 【追加要件1】逃げ馬特権システム（スローペースの恩恵）
-                    if (pace === 1 && horse.runStyle === 1) {
-                        score += 15;
-                        alerts.push({ text: "🏎️ 展開支配: スロー逃げ特権発動 (+15)", type: "magic" });
-                    }
-
-                    // ペースと職人の掛け合わせ
                     if (raceType === '3yo' && pace === 1) {
                         if (horse.popularity === 1) {
                             if (isMagicJockey) { alerts.push({ text: "✨ 魔法/職人芸 (スロー罠無効化)", type: "magic" }); score += 15; } 
@@ -281,25 +277,16 @@
                         if (processedTags.includes("ハイペース消耗戦適性◎") && pace === 3) { score += 20; alerts.push({ text: "🚨 厳しい消耗戦で能力全開", type: "warning" }); }
                     }
 
-                    // 血統適性（pedigreeApt）のスコア統合ロジック（二重評価の回避）
+                    // 血統適性ロジック
                     if (horse.pedigreeApt === 'S') {
-                        if (baseScoreRef < 70) {
-                            score += 10;
-                        } else {
-                            score += 5;
-                        }
+                        if (baseScoreRef < 70) { score += 10; } else { score += 5; }
                         alerts.push({ text: "🧬 特注血統: 舞台適性S (限界突破)", type: "magic" });
                     } else if (horse.pedigreeApt === 'A') {
-                        if (baseScoreRef < 70) {
-                            score += 5;
-                        } else {
-                            score += 2;
-                        }
+                        if (baseScoreRef < 70) { score += 5; } else { score += 2; }
                         alerts.push({ text: "🧬 血統適合: 舞台適性A", type: "warning" });
                     }
                     
                     score = Math.max(0, Math.round(score));
-                    
                     return { ...horse, tags: processedTags, score, alerts, isMagicJockey };
                 });
 
@@ -354,28 +341,60 @@
                 ];
             }, [selectedHorseData]);
 
+            // ★ バグ修正：X（Twitter）の文字数制限に合わせたオートリサイズ機能
             const shareToX = () => {
                 const weatherIcon = weather === 'rainy' ? '☔' : weather === 'cloudy' ? '☁️' : '☀️';
-                let text = "";
                 const marks = ['◎', '◯', '▲', '△'];
-
-                if (isCustomPrediction) {
-                    text = `【${raceInfo.raceName} 私の予想印】\n\n`;
-                    customPredictions.forEach((horseNo, idx) => {
-                        const h = horses.find(h => h.no === horseNo);
-                        if (h) text += `${marks[idx]} [${h.frame}枠${h.no}番] ${h.name}\n`;
-                    });
-                } else {
-                    text = `【${raceInfo.raceName} シミュレーション結果】\n`;
-                    text += `${weatherIcon}${getPaceText(pace)}・${getCondText(cond)}想定なら…\n\n`;
-                    const topHorses = calculatedHorses.slice(0, 4);
-                    topHorses.forEach((h, idx) => {
-                        text += `${marks[idx]} [${h.frame}枠${h.no}番] ${h.name} (スコア:${h.score})\n`;
-                    });
-                }
-                
-                text += `\n黒マル式競馬予想シュミレーター\n`;
                 const url = window.location.href;
+
+                // 文字数カウントのヘルパー（半角=1、全角等=2としてざっくり計算）
+                const getTwitterLength = (str) => {
+                    let len = 0;
+                    for (let i = 0; i < str.length; i++) {
+                        len += str[i].match(/[ -~]/) ? 1 : 2;
+                    }
+                    return len;
+                };
+
+                // 情報量を調整できるテキスト生成関数
+                const generateText = (includeScore, includeFrame) => {
+                    let t = "";
+                    if (isCustomPrediction) {
+                        t = `【${raceInfo.raceName} 私の予想印】\n\n`;
+                        customPredictions.forEach((horseNo, idx) => {
+                            const h = horses.find(h => h.no === horseNo);
+                            if (h) {
+                                const frameText = includeFrame ? `[${h.frame}枠${h.no}番] ` : "";
+                                t += `${marks[idx]} ${frameText}${h.name}\n`;
+                            }
+                        });
+                    } else {
+                        t = `【${raceInfo.raceName} 展開シミュ】\n`;
+                        t += `${weatherIcon}${getPaceText(pace)}・${getCondText(cond)}\n\n`;
+                        const topHorses = calculatedHorses.slice(0, 4);
+                        topHorses.forEach((h, idx) => {
+                            const frameText = includeFrame ? `[${h.frame}枠${h.no}番] ` : "";
+                            const scoreText = includeScore ? ` (${h.score})` : "";
+                            t += `${marks[idx]} ${frameText}${h.name}${scoreText}\n`;
+                        });
+                    }
+                    t += `\n#黒マル式競馬予想シュミレーター\n`;
+                    return t;
+                };
+
+                // 【レベル1】全情報を載せる
+                let text = generateText(true, true);
+
+                // 【レベル2】URLの23文字を考慮し、全角140文字（長さ目安250）を超える場合はスコアを削る
+                if (getTwitterLength(text) > 250 && !isCustomPrediction) {
+                    text = generateText(false, true);
+                }
+
+                // 【レベル3】それでも超える場合は枠・馬番も削る
+                if (getTwitterLength(text) > 250) {
+                    text = generateText(false, false);
+                }
+
                 const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
                 window.open(xUrl, '_blank');
             };
