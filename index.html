@@ -90,8 +90,6 @@
         const getPaceText = (v) => v === 1 ? "ドスロー" : v === 2 ? "ミドル" : "ハイペース";
         const getCondText = (v) => v === 1 ? "高速(良)" : v === 2 ? "標準(稍重)" : "タフ(重不)";
         const getBiasText = (v) => v === 1 ? "超イン" : v === 2 ? "イン有利" : v === 3 ? "フラット" : v === 4 ? "外伸び" : "大外差し";
-        
-        const getJockeyReliabilityText = (v) => v === 'S' ? "特大" : v === 'A' ? "高" : v === 'B' ? "標準" : "-";
 
         function App() {
             const [allRacesData, setAllRacesData] = useState([]);
@@ -341,7 +339,7 @@
                 ];
             }, [selectedHorseData]);
 
-            // ★ バグ修正：X（Twitter）の文字数制限に合わせたオートリサイズ機能
+            // X（Twitter）の文字数制限に合わせたオートリサイズ機能
             const shareToX = () => {
                 const weatherIcon = weather === 'rainy' ? '☔' : weather === 'cloudy' ? '☁️' : '☀️';
                 const marks = ['◎', '◯', '▲', '△'];
@@ -360,7 +358,8 @@
                 const generateText = (includeScore, includeFrame) => {
                     let t = "";
                     if (isCustomPrediction) {
-                        t = `【${raceInfo.raceName} 私の予想印】\n\n`;
+                        // パターンB: 独自予想
+                        t = `【${raceInfo.raceName} 予想】\n\n`;
                         customPredictions.forEach((horseNo, idx) => {
                             const h = horses.find(h => h.no === horseNo);
                             if (h) {
@@ -369,12 +368,13 @@
                             }
                         });
                     } else {
-                        t = `【${raceInfo.raceName} 展開シミュ】\n`;
-                        t += `${weatherIcon}${getPaceText(pace)}・${getCondText(cond)}\n\n`;
+                        // パターンA: シミュレーション結果
+                        t = `【${raceInfo.raceName} 予想】\n`;
+                        t += `${weatherIcon}${getPaceText(pace)}・${getCondText(cond)} 想定\n\n`;
                         const topHorses = calculatedHorses.slice(0, 4);
                         topHorses.forEach((h, idx) => {
                             const frameText = includeFrame ? `[${h.frame}枠${h.no}番] ` : "";
-                            const scoreText = includeScore ? ` (${h.score})` : "";
+                            const scoreText = includeScore ? ` (スコア:${h.score})` : "";
                             t += `${marks[idx]} ${frameText}${h.name}${scoreText}\n`;
                         });
                     }
@@ -466,7 +466,7 @@
                                     <ul className="space-y-1 text-xs mb-2 border-b border-slate-800 pb-2">
                                         <li className="flex justify-between pb-1"><span>上がりポテンシャル</span><span className="text-white font-bold">{(selectedHorseData.spurt || 3) >= 4 ? '瞬発力型' : '消耗戦型'} (Lv.{selectedHorseData.spurt || 3})</span></li>
                                         <li className="flex justify-between pb-1"><span>想定脚質 / 騎手</span><span className="text-white font-bold">{selectedHorseData.runStyle === 1 ? '逃げ' : selectedHorseData.runStyle === 2 ? '先行' : selectedHorseData.runStyle === 3 ? '差し' : '追込'} / {selectedHorseData.jockeyName || '未定'}</span></li>
-                                        <li className="flex justify-between pb-1"><span>鞍上期待度</span><span className={`font-bold ${selectedHorseData.jockeyClass === 'S' ? 'text-yellow-400' : selectedHorseData.jockeyClass === 'A' ? 'text-emerald-400' : 'text-slate-300'}`}>{getJockeyReliabilityText(selectedHorseData.jockeyClass)}</span></li>
+                                        {/* 鞍上期待度のUI表示は削除し、内部計算のみに残しました */}
                                         <li className="flex justify-between pb-1"><span>血統適性</span><span className={`font-bold ${selectedHorseData.pedigreeApt === 'S' ? 'text-yellow-400' : selectedHorseData.pedigreeApt === 'A' ? 'text-emerald-400' : 'text-slate-300'}`}>{selectedHorseData.pedigreeApt ? `評価 ${selectedHorseData.pedigreeApt}` : '-'}</span></li>
                                     </ul>
                                     <div className="mt-2 p-2 bg-slate-800/60 border border-slate-700 rounded text-[11px]">
@@ -591,17 +591,18 @@
 
                             <button onClick={shareToX} className="w-full bg-slate-100 hover:bg-white text-slate-950 font-black py-3 rounded-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 shadow-lg">
                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                                {isCustomPrediction ? "私の予想印をXでシェアする" : "この展開シミュレーション結果をシェアする"}
+                                {isCustomPrediction ? "予想をXでシェアする" : "この展開シミュレーション結果をシェアする"}
                             </button>
                         </div>
                     </div>
                     
                     <div className="mt-8 bg-slate-900 p-5 rounded-lg border border-slate-800 text-xs text-slate-400 leading-relaxed">
-                        <h4 className="text-slate-300 font-bold mb-3 flex items-center text-sm"><span className="mr-2">⚠️</span> 本シミュレーターのご利用に関する注意事項</h4>
+                        <h4 className="text-slate-300 font-bold mb-3 flex items-center text-sm"><span className="mr-2">⚠️</span> 本シミュレーターのご利用に関する注意事項（免責事項）</h4>
                         <ul className="list-disc pl-5 space-y-2">
-                            <li><strong>本ツールの性質：</strong>本シミュレーターは、管理者が複数の競馬情報サイト等の公開データを独自に分析し、個人の見解とロジックに基づいてスコアリングを行った「非公式の個人制作ツール」です。</li>
-                            <li><strong>情報の正確性：</strong>表示されているデータ、適合スコアなどの正確性・最新性を完全に保証するものではありません。実際の確定情報は、必ずJRA等の公式発表をご確認ください。</li>
-                            <li><strong>自己責任：</strong>馬券の購入は必ずご自身の判断と自己責任で行ってください。本ツールの利用によって生じたいかなる損害につきましても、管理者は一切の責任を負いかねます。</li>
+                            <li><strong>本ツールの性質について：</strong>本シミュレーターは、管理者が複数の競馬情報サイト等の公開データを独自に分析し、個人の見解とロジックに基づいてスコアリングを行った「非公式の個人制作ツール」です。</li>
+                            <li><strong>情報の正確性について：</strong>表示されている出走馬データ、想定オッズ、適合スコアなどの正確性・最新性を完全に保証するものではありません。実際の確定情報は、必ずJRA等の公式発表をご確認ください。</li>
+                            <li><strong>自己責任の原則：</strong>本ツールが算出する「適合スコア」は、あくまでレース展開を想定するためのシミュレーション上の参考値であり、馬券の購入は必ずご自身の判断と自己責任で行ってください。</li>
+                            <li><strong>免責事項：</strong>本ツールの利用によって生じたいかなる損害につきましても、管理者は一切の責任を負いかねます。</li>
                         </ul>
                     </div>
                     <div className="absolute bottom-4 right-4"><button onClick={handleCopyPrompt} className="text-[10px] text-slate-800 hover:text-slate-500 transition-colors font-mono">{copyStatus ? copyStatus : "🔒 Admin"}</button></div>
