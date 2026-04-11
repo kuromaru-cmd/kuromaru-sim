@@ -231,12 +231,24 @@
                     if (weather === 'sunny' && cond === 1 && horse.frame >= 8) { biasDiff *= 0.5; alerts.push({ text: "☀️ 天候連動: 外枠不利を軽減", type: "magic" }); }
                     if (isMagicJockey && biasDiff > 1) { biasDiff = 1; alerts.push({ text: "✨ 名手/職人補正: バイアス不利無効化", type: "magic" }); }
                     
+                    // ★ 【追加要件2】内枠 × 上位騎手のバイアス適応バフ
+                    if (effectiveBias === 1 && horse.frame >= 1 && horse.frame <= 4 && (horse.jockeyClass === 'S' || horse.jockeyClass === 'A')) {
+                        biasDiff *= 0.5;
+                        alerts.push({ text: "🛡️ 騎手手腕: インベタ適応バフ (減点半減)", type: "warning" });
+                    }
+
                     // ベースの適性スコア加算
                     score += (4 - biasDiff) * 3;
                     score += (2 - Math.abs((horse.optPace || 2) - pace)) * 5;
                     score += (2 - Math.abs((horse.optCond || 2) - cond)) * 5;
                     score += (2 - Math.abs((horse.optCourse || 3) - course)) * 4;
                     
+                    // ★ 【追加要件1】逃げ馬特権システム（スローペースの恩恵）
+                    if (pace === 1 && horse.runStyle === 1) {
+                        score += 15;
+                        alerts.push({ text: "🏎️ 展開支配: スロー逃げ特権発動 (+15)", type: "magic" });
+                    }
+
                     // ペースと職人の掛け合わせ
                     if (raceType === '3yo' && pace === 1) {
                         if (horse.popularity === 1) {
@@ -269,7 +281,7 @@
                         if (processedTags.includes("ハイペース消耗戦適性◎") && pace === 3) { score += 20; alerts.push({ text: "🚨 厳しい消耗戦で能力全開", type: "warning" }); }
                     }
 
-                    // ★ 血統適性（pedigreeApt）のスコア統合ロジック（二重評価の回避）
+                    // 血統適性（pedigreeApt）のスコア統合ロジック（二重評価の回避）
                     if (horse.pedigreeApt === 'S') {
                         if (baseScoreRef < 70) {
                             score += 10;
