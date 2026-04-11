@@ -160,6 +160,7 @@
                         } else if (parsedData && parsedData.race && parsedData.horses && Array.isArray(parsedData.horses)) {
                             validRaces = [parsedData];
                         }
+
                         if (validRaces.length > 0) {
                             setAllRacesData(validRaces); 
                             loadRaceData(validRaces[0]); 
@@ -219,20 +220,24 @@
                 const effectiveBias = weatherRecovery ? getRecoveredBias(course) : bias;
                 const result = horses.map(horse => {
                     let score = horse.baseScore || 0;
+                    const baseScoreRef = horse.baseScore || 0;
                     let alerts = [];
                     let biasDiff = Math.abs((horse.optBias || 3) - effectiveBias);
                     const isMagicJockey = horse.jockeyClass === 'S' || horse.specialJockey === true;
                     
                     const currentWeightDiff = manualWeightDiffs[horse.no] !== undefined ? manualWeightDiffs[horse.no] : (horse.weightDiff || 0);
 
+                    // 天候と職人補正
                     if (weather === 'sunny' && cond === 1 && horse.frame >= 8) { biasDiff *= 0.5; alerts.push({ text: "☀️ 天候連動: 外枠不利を軽減", type: "magic" }); }
                     if (isMagicJockey && biasDiff > 1) { biasDiff = 1; alerts.push({ text: "✨ 名手/職人補正: バイアス不利無効化", type: "magic" }); }
                     
+                    // ベースの適性スコア加算
                     score += (4 - biasDiff) * 3;
                     score += (2 - Math.abs((horse.optPace || 2) - pace)) * 5;
                     score += (2 - Math.abs((horse.optCond || 2) - cond)) * 5;
                     score += (2 - Math.abs((horse.optCourse || 3) - course)) * 4;
                     
+                    // ペースと職人の掛け合わせ
                     if (raceType === '3yo' && pace === 1) {
                         if (horse.popularity === 1) {
                             if (isMagicJockey) { alerts.push({ text: "✨ 魔法/職人芸 (スロー罠無効化)", type: "magic" }); score += 15; } 
@@ -240,6 +245,7 @@
                         } else if (isMagicJockey) { alerts.push({ text: "✨ 魔法/職人芸 (スタミナ温存)", type: "magic" }); score += 10; }
                     } else if (pace === 1 && isMagicJockey) { alerts.push({ text: "✨ 魔法/職人芸 (展開支配)", type: "magic" }); score += 10; }
                     
+                    // 馬体重増減の解読ロジック
                     if (currentWeightDiff <= -10) {
                         if (isMagicJockey) { alerts.push({ text: "✨ -10kg超: 究極仕上げ (名手の魔法で枯渇回避)", type: "magic" }); score += 5; } 
                         else if (horse.isTransport) { alerts.push({ text: "⚠️ -10kg超: 長距離輸送による想定減 (許容範囲)", type: "warning" }); score -= 5; } 
@@ -250,6 +256,7 @@
                         else { alerts.push({ text: "💣 +10kg超: 太め残りの危険性あり", type: "danger" }); score -= 10; }
                     }
                     
+                    // タグ補正
                     let processedTags = [];
                     if (Array.isArray(horse.tags)) {
                         processedTags = horse.tags.map(t => {
@@ -261,9 +268,29 @@
                         if (processedTags.includes("内枠・先行適性◎") && effectiveBias <= 2 && pace === 1) { score += 20; alerts.push({ text: "🚨 イン前優位条件に完全合致", type: "danger" }); }
                         if (processedTags.includes("ハイペース消耗戦適性◎") && pace === 3) { score += 20; alerts.push({ text: "🚨 厳しい消耗戦で能力全開", type: "warning" }); }
                     }
+
+                    // ★ 血統適性（pedigreeApt）のスコア統合ロジック（二重評価の回避）
+                    if (horse.pedigreeApt === 'S') {
+                        if (baseScoreRef < 70) {
+                            score += 10;
+                        } else {
+                            score += 5;
+                        }
+                        alerts.push({ text: "🧬 特注血統: 舞台適性S (限界突破)", type: "magic" });
+                    } else if (horse.pedigreeApt === 'A') {
+                        if (baseScoreRef < 70) {
+                            score += 5;
+                        } else {
+                            score += 2;
+                        }
+                        alerts.push({ text: "🧬 血統適合: 舞台適性A", type: "warning" });
+                    }
+                    
                     score = Math.max(0, Math.round(score));
+                    
                     return { ...horse, tags: processedTags, score, alerts, isMagicJockey };
                 });
+
                 let sorted = result.sort((a, b) => b.score - a.score);
                 let currentRank = 1; let previousScore = -1;
                 return sorted.map((horse, index) => {
@@ -275,7 +302,12 @@
 
             useEffect(() => {
                 if (!isCustomPrediction && calculatedHorses.length >= 4) {
-                    setCustomPredictions([calculatedHorses[0].no, calculatedHorses[1].no, calculatedHorses[2].no, calculatedHorses[3].no]);
+                    setCustomPredictions([
+                        calculatedHorses[0].no,
+                        calculatedHorses[1].no,
+                        calculatedHorses[2].no,
+                        calculatedHorses[3].no
+                    ]);
                 }
             }, [calculatedHorses, isCustomPrediction]);
 
@@ -286,7 +318,9 @@
                 setCustomPredictions(newPredictions);
             };
 
-            const resetCustomPrediction = () => { setIsCustomPrediction(false); };
+            const resetCustomPrediction = () => {
+                setIsCustomPrediction(false);
+            };
 
             useEffect(() => {
                 if (calculatedHorses.length > 0 && selectedHorseId === null) setSelectedHorseId(calculatedHorses[0].no);
@@ -312,6 +346,7 @@
                 const weatherIcon = weather === 'rainy' ? '☔' : weather === 'cloudy' ? '☁️' : '☀️';
                 let text = "";
                 const marks = ['◎', '◯', '▲', '△'];
+
                 if (isCustomPrediction) {
                     text = `【${raceInfo.raceName} 私の予想印】\n\n`;
                     customPredictions.forEach((horseNo, idx) => {
@@ -326,6 +361,7 @@
                         text += `${marks[idx]} [${h.frame}枠${h.no}番] ${h.name} (スコア:${h.score})\n`;
                     });
                 }
+                
                 text += `\n黒マル式競馬予想シュミレーター\n`;
                 const url = window.location.href;
                 const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
@@ -400,7 +436,6 @@
                                         <li className="flex justify-between pb-1"><span>上がりポテンシャル</span><span className="text-white font-bold">{(selectedHorseData.spurt || 3) >= 4 ? '瞬発力型' : '消耗戦型'} (Lv.{selectedHorseData.spurt || 3})</span></li>
                                         <li className="flex justify-between pb-1"><span>想定脚質 / 騎手</span><span className="text-white font-bold">{selectedHorseData.runStyle === 1 ? '逃げ' : selectedHorseData.runStyle === 2 ? '先行' : selectedHorseData.runStyle === 3 ? '差し' : '追込'} / {selectedHorseData.jockeyName || '未定'}</span></li>
                                         <li className="flex justify-between pb-1"><span>鞍上期待度</span><span className={`font-bold ${selectedHorseData.jockeyClass === 'S' ? 'text-yellow-400' : selectedHorseData.jockeyClass === 'A' ? 'text-emerald-400' : 'text-slate-300'}`}>{getJockeyReliabilityText(selectedHorseData.jockeyClass)}</span></li>
-                                        {/* ★ 血統適性のみの表示に変更 */}
                                         <li className="flex justify-between pb-1"><span>血統適性</span><span className={`font-bold ${selectedHorseData.pedigreeApt === 'S' ? 'text-yellow-400' : selectedHorseData.pedigreeApt === 'A' ? 'text-emerald-400' : 'text-slate-300'}`}>{selectedHorseData.pedigreeApt ? `評価 ${selectedHorseData.pedigreeApt}` : '-'}</span></li>
                                     </ul>
                                     <div className="mt-2 p-2 bg-slate-800/60 border border-slate-700 rounded text-[11px]">
@@ -502,7 +537,7 @@
                                     <span className="text-xs font-bold text-slate-300 flex items-center">✍️ SNSシェア用 予想印</span>
                                     {isCustomPrediction && (
                                         <button onClick={resetCustomPrediction} className="text-[9px] text-cyan-400 hover:text-cyan-300 border border-cyan-800/50 bg-slate-800 px-2 py-0.5 rounded transition-colors">
-                                            🔄 評価順に戻す
+                                            🔄 シミュレーション評価順に戻す
                                         </button>
                                     )}
                                 </div>
@@ -525,7 +560,7 @@
 
                             <button onClick={shareToX} className="w-full bg-slate-100 hover:bg-white text-slate-950 font-black py-3 rounded-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 shadow-lg">
                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                                {isCustomPrediction ? "私の予想印をXでシェアする" : "この展開結果をシェアする"}
+                                {isCustomPrediction ? "私の予想印をXでシェアする" : "この展開シミュレーション結果をシェアする"}
                             </button>
                         </div>
                     </div>
