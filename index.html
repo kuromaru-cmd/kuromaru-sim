@@ -41,7 +41,7 @@
 【重要：出力形式について】
 スプレッドシートの1つのセルにそのまま貼り付けられるように、JSONの改行やインデント（空白）をすべて削除し、完全に「1行の文字列（Minified JSON）」として出力してください。
 
-{"race":{"updatedAt":"2026/04/09","date":"2026/04/12","raceName":"桜花賞(G1)","location":"阪神","courseName":"芝1600m (外回り)","raceType":"3yo","course":3,"weather":"sunny","bias":3,"pace":2,"cond":2},"horses":[{"no":1,"name":"馬の名前","frame":1,"runStyle":2,"odds":5.5,"baseScore":65,"optBias":3,"optPace":2,"optCond":2,"optCourse":2,"spurt":3,"jockeyName":"川田将雅","jockeyClass":"A","specialJockey":true,"popularity":3,"weightDiff":0,"isTransport":true,"pedigreeApt":"A","tags":["内枠・先行適性◎"],"isMarked":true}]}
+{"race":{"updatedAt":"2026/04/09","date":"2026/04/12","raceName":"桜花賞(G1)","location":"阪神","courseName":"芝1600m (外回り)","raceType":"3yo","course":3,"weather":"sunny","bias":3,"pace":2,"cond":2},"horses":[{"no":1,"name":"馬の名前","frame":1,"runStyle":2,"odds":5.5,"baseScore":65,"optBias":3,"optPace":2,"optCond":2,"optCourse":2,"spurt":3,"jockeyName":"川田将雅","jockeyClass":"A","specialJockey":true,"popularity":3,"weightDiff":0,"isTransport":true,"pedigreeApt":"A","tags":["内枠・先行適性◎", "揉まれ弱さ"],"isMarked":true}]}
 
 【各項目のルール】
 [race]
@@ -55,7 +55,7 @@
 * weightDiff: 想定される馬体重増減
 * isTransport: 長距離遠征リスクがある場合はtrue、それ以外はfalse
 * pedigreeApt: 血統面から見た当レースへの適性評価（S, A, B）
-* tags: 特殊能力のタグ配列（例：["内枠・先行適性◎", "ハイペース消耗戦適性◎", "道悪巧者", "瞬発力特化型"]）`;
+* tags: 特殊能力のタグ配列（例：["内枠・先行適性◎", "ハイペース消耗戦適性◎", "揉まれ弱さ", "瞬発力特化型"]）`;
 
         const NativeRadarChart = ({ data }) => {
             const size = 220;
@@ -228,15 +228,31 @@
                     if (weather === 'sunny' && cond === 1 && horse.frame >= 8) { biasDiff *= 0.5; alerts.push({ text: "☀️ 天候連動: 外枠不利を軽減", type: "magic" }); }
                     if (isMagicJockey && biasDiff > 1) { biasDiff = 1; alerts.push({ text: "✨ 名手/職人補正: バイアス不利無効化", type: "magic" }); }
                     
-                    // OMEGA 3.0 オーバードライブ・プロトコル
+                    // ==========================================
+                    // OMEGA 3.0 / 4.1 オーバードライブ・プロトコル
+                    // ==========================================
+
+                    // 【OMEGA 3.0】逃げ馬特権システム
                     if (pace === 1 && horse.runStyle === 1) {
                         score += 15;
                         alerts.push({ text: "🏎️ 展開支配: スロー逃げ特権発動 (+15)", type: "magic" });
                     }
+                    
+                    // 【OMEGA 3.0】内枠 × 上位騎手のインベタ適応バフ
                     if (effectiveBias === 1 && horse.frame <= 4 && (horse.jockeyClass === 'S' || horse.jockeyClass === 'A')) {
                         biasDiff *= 0.5;
                         alerts.push({ text: "🛡️ 騎手手腕: インベタ適応バフ (減点半減)", type: "warning" });
                     }
+
+                    // 【OMEGA 4.1】ハイペース×イン有利時の「死んだふりイン突き」 (枠順不問に修正)
+                    if (effectiveBias <= 2 && pace === 3) {
+                        if (baseScoreRef <= 60 && horse.runStyle >= 3) {
+                            score += 25;
+                            alerts.push({ text: "🃏 激流ハック: 枠不問のイン突きジョーカー", type: "warning" });
+                        }
+                    }
+
+                    // ------------------------------------------
 
                     // ベースの適性スコア加算
                     score += (4 - biasDiff) * 3;
@@ -253,16 +269,26 @@
                     
                     // 馬体重増減の解読ロジック
                     if (currentWeightDiff <= -10) {
-                        if (isMagicJockey) { alerts.push({ text: "✨ -10kg超: 究極仕上げ (名手の魔法で枯渇回避)", type: "magic" }); score += 5; } 
-                        else if (horse.isTransport) { alerts.push({ text: "⚠️ -10kg超: 長距離輸送による想定減 (許容範囲)", type: "warning" }); score -= 5; } 
-                        else { alerts.push({ text: "🚨 -10kg超: 輸送なしでの大幅減 (肉体の枯渇・危険)", type: "danger" }); score -= 15; }
+                        // インベタ×内枠の恩恵で枯渇リスク相殺
+                        if (effectiveBias <= 2 && horse.frame <= 3) {
+                            alerts.push({ text: "🛡️ 枯渇無効: インベタ最短距離の恩恵", type: "magic" });
+                        } else if (isMagicJockey) { 
+                            alerts.push({ text: "✨ -10kg超: 究極仕上げ (名手の魔法で枯渇回避)", type: "magic" }); 
+                            score += 5; 
+                        } else if (horse.isTransport) { 
+                            alerts.push({ text: "⚠️ -10kg超: 長距離輸送による想定減 (許容範囲)", type: "warning" }); 
+                            score -= 5; 
+                        } else { 
+                            alerts.push({ text: "🚨 -10kg超: 輸送なしでの大幅減 (肉体の枯渇・危険)", type: "danger" }); 
+                            score -= 15; 
+                        }
                     } else if (currentWeightDiff >= 10) {
                         if (raceType === '3yo') { alerts.push({ text: "✨ +10kg超: 成長分 (骨格・パワーの増強)", type: "magic" }); score += 5; } 
                         else if (cond === 3) { alerts.push({ text: "💪 +10kg超: 重馬場適合のパワー装甲", type: "magic" }); score += 5; } 
                         else { alerts.push({ text: "💣 +10kg超: 太め残りの危険性あり", type: "danger" }); score -= 10; }
                     }
                     
-                    // タグ補正
+                    // タグ補正 ＆ 揉まれ弱さの反転ロジック
                     let processedTags = [];
                     if (Array.isArray(horse.tags)) {
                         processedTags = horse.tags.map(t => {
@@ -273,6 +299,18 @@
                         processedTags = [...new Set(processedTags)]; 
                         if (processedTags.includes("内枠・先行適性◎") && effectiveBias <= 2 && pace === 1) { score += 20; alerts.push({ text: "🚨 イン前優位条件に完全合致", type: "danger" }); }
                         if (processedTags.includes("ハイペース消耗戦適性◎") && pace === 3) { score += 20; alerts.push({ text: "🚨 厳しい消耗戦で能力全開", type: "warning" }); }
+
+                        // 揉まれ弱さタグの検知
+                        const hasMomareYowasa = processedTags.some(t => t.includes("揉まれ弱さ"));
+                        if (hasMomareYowasa) {
+                            if (horse.jockeyClass === 'S' || horse.jockeyClass === 'A') {
+                                score += 15;
+                                alerts.push({ text: "✨ 名手の魔法: 弱点逆手の極端戦法フラグ", type: "magic" });
+                            } else {
+                                score -= 10;
+                                alerts.push({ text: "⚠️ 弱点露呈: 揉まれ弱さによる後退リスク", type: "danger" });
+                            }
+                        }
                     }
 
                     // 血統適性ロジック
@@ -466,7 +504,6 @@
                                     <ul className="space-y-1 text-xs mb-2 border-b border-slate-800 pb-2">
                                         <li className="flex justify-between pb-1"><span>上がりポテンシャル</span><span className="text-white font-bold">{(selectedHorseData.spurt || 3) >= 4 ? '瞬発力型' : '消耗戦型'} (Lv.{selectedHorseData.spurt || 3})</span></li>
                                         <li className="flex justify-between pb-1"><span>想定脚質 / 騎手</span><span className="text-white font-bold">{selectedHorseData.runStyle === 1 ? '逃げ' : selectedHorseData.runStyle === 2 ? '先行' : selectedHorseData.runStyle === 3 ? '差し' : '追込'} / {selectedHorseData.jockeyName || '未定'}</span></li>
-                                        {/* 鞍上期待度のUI表示は削除し、内部計算のみに残しました */}
                                         <li className="flex justify-between pb-1"><span>血統適性</span><span className={`font-bold ${selectedHorseData.pedigreeApt === 'S' ? 'text-yellow-400' : selectedHorseData.pedigreeApt === 'A' ? 'text-emerald-400' : 'text-slate-300'}`}>{selectedHorseData.pedigreeApt ? `評価 ${selectedHorseData.pedigreeApt}` : '-'}</span></li>
                                     </ul>
                                     <div className="mt-2 p-2 bg-slate-800/60 border border-slate-700 rounded text-[11px]">
