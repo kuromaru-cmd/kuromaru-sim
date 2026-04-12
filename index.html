@@ -108,7 +108,9 @@
             const [selectedHorseId, setSelectedHorseId] = useState(null);
             
             const [manualWeightDiffs, setManualWeightDiffs] = useState({});
-            const [customPredictions, setCustomPredictions] = useState([null, null, null, null]);
+            
+            // ★ カスタム予想印（5枠：◎, ◯, ▲, △, ☆）
+            const [customPredictions, setCustomPredictions] = useState([null, null, null, null, null]);
             const [isCustomPrediction, setIsCustomPrediction] = useState(false);
 
             const [isLoading, setIsLoading] = useState(true);
@@ -244,11 +246,11 @@
                         alerts.push({ text: "🛡️ 騎手手腕: インベタ適応バフ (減点半減)", type: "warning" });
                     }
 
-                    // 【OMEGA 4.1】ハイペース×イン有利時の「死んだふりイン突き」 (枠順不問に修正)
+                    // 【OMEGA 4.1】ハイペース×イン有利時の「死んだふりイン突き」 (枠順不問・ジョーカー→伏兵表記)
                     if (effectiveBias <= 2 && pace === 3) {
                         if (baseScoreRef <= 60 && horse.runStyle >= 3) {
                             score += 25;
-                            alerts.push({ text: "🃏 激流ハック: 枠不問のイン突きジョーカー", type: "warning" });
+                            alerts.push({ text: "🃏 激流ハック: 枠不問のイン突き伏兵", type: "warning" });
                         }
                     }
 
@@ -269,7 +271,6 @@
                     
                     // 馬体重増減の解読ロジック
                     if (currentWeightDiff <= -10) {
-                        // インベタ×内枠の恩恵で枯渇リスク相殺
                         if (effectiveBias <= 2 && horse.frame <= 3) {
                             alerts.push({ text: "🛡️ 枯渇無効: インベタ最短距離の恩恵", type: "magic" });
                         } else if (isMagicJockey) { 
@@ -293,6 +294,7 @@
                     if (Array.isArray(horse.tags)) {
                         processedTags = horse.tags.map(t => {
                             if (t.includes("インベタ")) return "内枠・先行適性◎";
+                            // ※過去データ対応のため裏側でのみ変換処理を残しています
                             if (t.includes("ジョーカー")) return "ハイペース消耗戦適性◎";
                             return t;
                         });
@@ -335,16 +337,27 @@
                 });
             }, [horses, weather, bias, pace, cond, course, raceType, weatherRecovery, manualWeightDiffs]);
 
+            // ★ ピックアップ欄表示用の特注伏兵（激流ハック）抽出ロジック
+            const darkHorses = useMemo(() => {
+                return calculatedHorses.filter(h => h.alerts.some(a => a.text.includes("激流ハック")));
+            }, [calculatedHorses]);
+
+            // ★ SNSシェアの5枠目（☆）に特注伏兵を自動セットするロジック
             useEffect(() => {
                 if (!isCustomPrediction && calculatedHorses.length >= 4) {
-                    setCustomPredictions([
-                        calculatedHorses[0].no,
-                        calculatedHorses[1].no,
-                        calculatedHorses[2].no,
-                        calculatedHorses[3].no
-                    ]);
+                    const top4 = calculatedHorses.slice(0, 4).map(h => h.no);
+                    
+                    // 伏兵がいれば最上位の馬を☆に、いなければ単純にランキング5位の馬を☆にセット
+                    let starVal = '';
+                    if (darkHorses.length > 0) {
+                        starVal = darkHorses[0].no;
+                    } else if (calculatedHorses.length >= 5) {
+                        starVal = calculatedHorses[4].no;
+                    }
+                    
+                    setCustomPredictions([...top4, starVal]);
                 }
-            }, [calculatedHorses, isCustomPrediction]);
+            }, [calculatedHorses, isCustomPrediction, darkHorses]);
 
             const handleCustomPredictionChange = (index, value) => {
                 setIsCustomPrediction(true);
@@ -380,7 +393,8 @@
             // X（Twitter）の文字数制限に合わせたオートリサイズ機能
             const shareToX = () => {
                 const weatherIcon = weather === 'rainy' ? '☔' : weather === 'cloudy' ? '☁️' : '☀️';
-                const marks = ['◎', '◯', '▲', '△'];
+                // 5枠に拡張
+                const marks = ['◎', '◯', '▲', '△', '☆'];
                 const url = window.location.href;
 
                 // 文字数カウントのヘルパー（半角=1、全角等=2としてざっくり計算）
@@ -399,6 +413,7 @@
                         // パターンB: 独自予想
                         t = `【${raceInfo.raceName} 予想】\n\n`;
                         customPredictions.forEach((horseNo, idx) => {
+                            if (!horseNo) return; // 空枠の場合はスキップ
                             const h = horses.find(h => h.no === horseNo);
                             if (h) {
                                 const frameText = includeFrame ? `[${h.frame}枠${h.no}番] ` : "";
@@ -409,11 +424,16 @@
                         // パターンA: シミュレーション結果
                         t = `【${raceInfo.raceName} 予想】\n`;
                         t += `${weatherIcon}${getPaceText(pace)}・${getCondText(cond)} 想定\n\n`;
-                        const topHorses = calculatedHorses.slice(0, 4);
-                        topHorses.forEach((h, idx) => {
-                            const frameText = includeFrame ? `[${h.frame}枠${h.no}番] ` : "";
-                            const scoreText = includeScore ? ` (スコア:${h.score})` : "";
-                            t += `${marks[idx]} ${frameText}${h.name}${scoreText}\n`;
+                        
+                        // 上位4頭 ＋ ☆枠（特注伏兵 または 5位）
+                        customPredictions.forEach((horseNo, idx) => {
+                            if (!horseNo) return;
+                            const h = horses.find(h => h.no === horseNo);
+                            if (h) {
+                                const frameText = includeFrame ? `[${h.frame}枠${h.no}番] ` : "";
+                                const scoreText = includeScore ? ` (スコア:${h.score})` : "";
+                                t += `${marks[idx]} ${frameText}${h.name}${scoreText}\n`;
+                            }
                         });
                     }
                     t += `\n#黒マル式競馬予想シュミレーター\n`;
@@ -559,6 +579,29 @@
                         </div>
 
                         <div className="lg:col-span-8">
+                            
+                            {/* ★ アイデア1: 特注伏兵専用ピックアップ欄 */}
+                            {darkHorses.length > 0 && (
+                                <div className="bg-slate-900/90 p-4 rounded-lg border border-rose-500/50 mb-6 shadow-[0_0_15px_rgba(244,63,94,0.15)] relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
+                                    <h3 className="text-rose-400 font-bold text-sm mb-3 flex items-center">
+                                        <span className="text-lg mr-2 animate-pulse">🔥</span> 異常検知：激流ハック該当馬（ヒモ穴推奨）
+                                    </h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {darkHorses.map(horse => (
+                                            <div key={`dark-${horse.no}`} onClick={() => setSelectedHorseId(horse.no)} className="bg-slate-800 border border-rose-500/30 p-2 rounded flex justify-between items-center cursor-pointer hover:bg-slate-700 transition-colors">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-rose-400 font-black text-sm">☆</span>
+                                                    <span className="text-slate-300 text-[10px] border border-slate-600 px-1 rounded">{horse.frame}枠{horse.no}番</span>
+                                                    <span className="text-white font-bold text-sm truncate max-w-[100px] sm:max-w-none">{horse.name}</span>
+                                                </div>
+                                                <div className="text-rose-400 font-black">{horse.score}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="border-b border-slate-800 pb-2 mb-4">
                                 <h3 className="text-emerald-400 font-bold text-sm">▶ 総合評価ランキング</h3>
                                 <p className="text-[10px] text-slate-500 mt-1">※直前の馬体重発表で<strong className="text-slate-400">±10kg以上の大幅な増減</strong>があった場合は、各馬の右端ボタンで補正してください。</p>
@@ -609,10 +652,11 @@
                                         </button>
                                     )}
                                 </div>
-                                <div className="grid grid-cols-4 gap-2">
-                                    {['◎', '◯', '▲', '△'].map((mark, i) => (
+                                {/* ★ アイデア2: 5枠目（☆）を追加 */}
+                                <div className="grid grid-cols-5 gap-2">
+                                    {['◎', '◯', '▲', '△', '☆'].map((mark, i) => (
                                         <div key={mark} className="flex flex-col">
-                                            <span className={`text-[10px] font-bold text-center mb-1 ${i === 0 ? 'text-rose-400' : i === 1 ? 'text-blue-400' : i === 2 ? 'text-emerald-400' : 'text-slate-400'}`}>{mark}</span>
+                                            <span className={`text-[10px] font-bold text-center mb-1 ${i === 0 ? 'text-rose-400' : i === 1 ? 'text-blue-400' : i === 2 ? 'text-emerald-400' : i === 3 ? 'text-slate-400' : 'text-yellow-400'}`}>{mark}</span>
                                             <select 
                                                 value={customPredictions[i] || ''} 
                                                 onChange={(e) => handleCustomPredictionChange(i, e.target.value)}
