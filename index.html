@@ -246,7 +246,7 @@
                         alerts.push({ text: "🛡️ 騎手手腕: インベタ適応バフ (減点半減)", type: "warning" });
                     }
 
-                    // 【OMEGA 4.1】ハイペース×イン有利時の「死んだふりイン突き」 (枠順不問・ジョーカー→伏兵表記)
+                    // 【OMEGA 4.1】ハイペース×イン有利時の「死んだふりイン突き」 (枠順不問)
                     if (effectiveBias <= 2 && pace === 3) {
                         if (baseScoreRef <= 60 && horse.runStyle >= 3) {
                             score += 25;
@@ -271,6 +271,7 @@
                     
                     // 馬体重増減の解読ロジック
                     if (currentWeightDiff <= -10) {
+                        // インベタ×内枠の恩恵で枯渇リスク相殺
                         if (effectiveBias <= 2 && horse.frame <= 3) {
                             alerts.push({ text: "🛡️ 枯渇無効: インベタ最短距離の恩恵", type: "magic" });
                         } else if (isMagicJockey) { 
@@ -294,7 +295,6 @@
                     if (Array.isArray(horse.tags)) {
                         processedTags = horse.tags.map(t => {
                             if (t.includes("インベタ")) return "内枠・先行適性◎";
-                            // ※過去データ対応のため裏側でのみ変換処理を残しています
                             if (t.includes("ジョーカー")) return "ハイペース消耗戦適性◎";
                             return t;
                         });
@@ -337,9 +337,9 @@
                 });
             }, [horses, weather, bias, pace, cond, course, raceType, weatherRecovery, manualWeightDiffs]);
 
-            // ★ ピックアップ欄表示用の特注伏兵（激流ハック）抽出ロジック
+            // ★ ピックアップ欄表示用の特注伏兵（激流ハック）抽出ロジック（スコア100以上のみに制限）
             const darkHorses = useMemo(() => {
-                return calculatedHorses.filter(h => h.alerts.some(a => a.text.includes("激流ハック")));
+                return calculatedHorses.filter(h => h.score >= 100 && h.alerts.some(a => a.text.includes("激流ハック")));
             }, [calculatedHorses]);
 
             // ★ SNSシェアの5枠目（☆）に特注伏兵を自動セットするロジック
