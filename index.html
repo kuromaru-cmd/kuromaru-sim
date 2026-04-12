@@ -109,7 +109,6 @@
             
             const [manualWeightDiffs, setManualWeightDiffs] = useState({});
             
-            // ★ カスタム予想印（5枠：◎, ◯, ▲, △, ☆）
             const [customPredictions, setCustomPredictions] = useState([null, null, null, null, null]);
             const [isCustomPrediction, setIsCustomPrediction] = useState(false);
 
@@ -227,30 +226,47 @@
                     
                     const currentWeightDiff = manualWeightDiffs[horse.no] !== undefined ? manualWeightDiffs[horse.no] : (horse.weightDiff || 0);
 
+                    // 天候と職人補正
                     if (weather === 'sunny' && cond === 1 && horse.frame >= 8) { biasDiff *= 0.5; alerts.push({ text: "☀️ 天候連動: 外枠不利を軽減", type: "magic" }); }
-                    if (isMagicJockey && biasDiff > 1) { biasDiff = 1; alerts.push({ text: "✨ 名手/職人補正: バイアス不利無効化", type: "magic" }); }
+                    if (isMagicJockey && biasDiff > 1) { biasDiff = 1; alerts.push({ text: "✨ 上位騎手の手腕: バイアス不利無効化", type: "magic" }); }
                     
                     // ==========================================
-                    // OMEGA 3.0 / 4.1 オーバードライブ・プロトコル
+                    // OMEGA プロトコル群
                     // ==========================================
 
                     // 【OMEGA 3.0】逃げ馬特権システム
                     if (pace === 1 && horse.runStyle === 1) {
                         score += 15;
-                        alerts.push({ text: "🏎️ 展開支配: スロー逃げ特権発動 (+15)", type: "magic" });
+                        alerts.push({ text: "🏎️ 展開有利: 単騎スロー逃げ", type: "magic" });
                     }
                     
                     // 【OMEGA 3.0】内枠 × 上位騎手のインベタ適応バフ
                     if (effectiveBias === 1 && horse.frame <= 4 && (horse.jockeyClass === 'S' || horse.jockeyClass === 'A')) {
                         biasDiff *= 0.5;
-                        alerts.push({ text: "🛡️ 騎手手腕: インベタ適応バフ (減点半減)", type: "warning" });
+                        alerts.push({ text: "🛡️ 騎手手腕: トラックバイアス不利を相殺", type: "warning" });
                     }
 
                     // 【OMEGA 4.1】ハイペース×イン有利時の「死んだふりイン突き」 (枠順不問)
                     if (effectiveBias <= 2 && pace === 3) {
                         if (baseScoreRef <= 60 && horse.runStyle >= 3) {
                             score += 25;
-                            alerts.push({ text: "🃏 激流ハック: 枠不問のイン突き伏兵", type: "warning" });
+                            alerts.push({ text: "🃏 展開有利: ハイペースのイン突き伏兵", type: "warning" });
+                        }
+                    }
+
+                    // 【OMEGA 4.2】ハイペース×外伸びバイアス時の「大外強襲伏兵」 (枠順不問)
+                    if (effectiveBias >= 4 && pace === 3) {
+                        if (baseScoreRef <= 65 && horse.runStyle >= 3) {
+                            score += 20;
+                            alerts.push({ text: "🌪️ 展開有利: ハイペースの大外一気伏兵", type: "warning" });
+                        }
+                    }
+
+                    // 【OMEGA 4.3】ドスロー時の「前残り伏兵」 (逃げ・先行／バイアス不問)
+                    if (pace === 1) {
+                        if (baseScoreRef <= 60 && horse.runStyle <= 2) {
+                            score += 25;
+                            alerts.push({ text: "🐢 展開有利: スローペースの前残り伏兵", type: "warning" });
                         }
                     }
 
@@ -264,18 +280,17 @@
                     
                     if (raceType === '3yo' && pace === 1) {
                         if (horse.popularity === 1) {
-                            if (isMagicJockey) { alerts.push({ text: "✨ 魔法/職人芸 (スロー罠無効化)", type: "magic" }); score += 15; } 
-                            else { alerts.push({ text: "💣 危険: 若駒スロー自滅の罠", type: "danger" }); score -= 30; }
-                        } else if (isMagicJockey) { alerts.push({ text: "✨ 魔法/職人芸 (スタミナ温存)", type: "magic" }); score += 10; }
-                    } else if (pace === 1 && isMagicJockey) { alerts.push({ text: "✨ 魔法/職人芸 (展開支配)", type: "magic" }); score += 10; }
+                            if (isMagicJockey) { alerts.push({ text: "✨ 上位騎手の手腕 (スローペース懸念相殺)", type: "magic" }); score += 15; } 
+                            else { alerts.push({ text: "💣 危険: 若駒の折り合い難リスク", type: "danger" }); score -= 30; }
+                        } else if (isMagicJockey) { alerts.push({ text: "✨ 上位騎手の手腕 (スタミナ温存)", type: "magic" }); score += 10; }
+                    } else if (pace === 1 && isMagicJockey) { alerts.push({ text: "✨ 上位騎手の手腕 (展開支配)", type: "magic" }); score += 10; }
                     
                     // 馬体重増減の解読ロジック
                     if (currentWeightDiff <= -10) {
-                        // インベタ×内枠の恩恵で枯渇リスク相殺
                         if (effectiveBias <= 2 && horse.frame <= 3) {
-                            alerts.push({ text: "🛡️ 枯渇無効: インベタ最短距離の恩恵", type: "magic" });
+                            alerts.push({ text: "🛡️ 馬体減不安を相殺: 最内ロスなしの恩恵", type: "magic" });
                         } else if (isMagicJockey) { 
-                            alerts.push({ text: "✨ -10kg超: 究極仕上げ (名手の魔法で枯渇回避)", type: "magic" }); 
+                            alerts.push({ text: "✨ -10kg超: 究極仕上げ (上位騎手でカバー)", type: "magic" }); 
                             score += 5; 
                         } else if (horse.isTransport) { 
                             alerts.push({ text: "⚠️ -10kg超: 長距離輸送による想定減 (許容範囲)", type: "warning" }); 
@@ -302,12 +317,11 @@
                         if (processedTags.includes("内枠・先行適性◎") && effectiveBias <= 2 && pace === 1) { score += 20; alerts.push({ text: "🚨 イン前優位条件に完全合致", type: "danger" }); }
                         if (processedTags.includes("ハイペース消耗戦適性◎") && pace === 3) { score += 20; alerts.push({ text: "🚨 厳しい消耗戦で能力全開", type: "warning" }); }
 
-                        // 揉まれ弱さタグの検知
                         const hasMomareYowasa = processedTags.some(t => t.includes("揉まれ弱さ"));
                         if (hasMomareYowasa) {
                             if (horse.jockeyClass === 'S' || horse.jockeyClass === 'A') {
                                 score += 15;
-                                alerts.push({ text: "✨ 名手の魔法: 弱点逆手の極端戦法フラグ", type: "magic" });
+                                alerts.push({ text: "✨ 上位騎手: 揉まれ弱さをカバーする極端戦法", type: "magic" });
                             } else {
                                 score -= 10;
                                 alerts.push({ text: "⚠️ 弱点露呈: 揉まれ弱さによる後退リスク", type: "danger" });
@@ -318,7 +332,7 @@
                     // 血統適性ロジック
                     if (horse.pedigreeApt === 'S') {
                         if (baseScoreRef < 70) { score += 10; } else { score += 5; }
-                        alerts.push({ text: "🧬 特注血統: 舞台適性S (限界突破)", type: "magic" });
+                        alerts.push({ text: "🧬 特注血統: 舞台適性S (能力最大化)", type: "magic" });
                     } else if (horse.pedigreeApt === 'A') {
                         if (baseScoreRef < 70) { score += 5; } else { score += 2; }
                         alerts.push({ text: "🧬 血統適合: 舞台適性A", type: "warning" });
@@ -337,9 +351,9 @@
                 });
             }, [horses, weather, bias, pace, cond, course, raceType, weatherRecovery, manualWeightDiffs]);
 
-            // ★ ピックアップ欄表示用の特注伏兵（激流ハック）抽出ロジック（スコア100以上のみに制限）
+            // ★ ピックアップ欄表示用の特注伏兵（スコア100以上 ＆ 伏兵アラートあり）
             const darkHorses = useMemo(() => {
-                return calculatedHorses.filter(h => h.score >= 100 && h.alerts.some(a => a.text.includes("激流ハック")));
+                return calculatedHorses.filter(h => h.score >= 100 && h.alerts.some(a => a.text.includes("伏兵")));
             }, [calculatedHorses]);
 
             // ★ SNSシェアの5枠目（☆）に特注伏兵を自動セットするロジック
@@ -585,7 +599,7 @@
                                 <div className="bg-slate-900/90 p-4 rounded-lg border border-rose-500/50 mb-6 shadow-[0_0_15px_rgba(244,63,94,0.15)] relative overflow-hidden">
                                     <div className="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
                                     <h3 className="text-rose-400 font-bold text-sm mb-3 flex items-center">
-                                        <span className="text-lg mr-2 animate-pulse">🔥</span> 異常検知：激流ハック該当馬（ヒモ穴推奨）
+                                        <span className="text-lg mr-2 animate-pulse">🔥</span> 穴馬アラート：展開特注の伏兵（ヒモ穴推奨）
                                     </h3>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         {darkHorses.map(horse => (
