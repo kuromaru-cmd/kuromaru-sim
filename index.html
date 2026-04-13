@@ -226,7 +226,6 @@
                     
                     const currentWeightDiff = manualWeightDiffs[horse.no] !== undefined ? manualWeightDiffs[horse.no] : (horse.weightDiff || 0);
 
-                    // 天候と職人補正
                     if (weather === 'sunny' && cond === 1 && horse.frame >= 8) { biasDiff *= 0.5; alerts.push({ text: "☀️ 天候連動: 外枠不利を軽減", type: "magic" }); }
                     if (isMagicJockey && biasDiff > 1) { biasDiff = 1; alerts.push({ text: "✨ 上位騎手の手腕: バイアス不利無効化", type: "magic" }); }
                     
@@ -246,27 +245,27 @@
                         alerts.push({ text: "🛡️ 騎手手腕: トラックバイアス不利を相殺", type: "warning" });
                     }
 
-                    // 【OMEGA 4.1】ハイペース×イン有利時の「死んだふりイン突き」 (枠順不問)
+                    // 【修正】OMEGA 4.1: ハイペース×イン有利（枠順不問）
                     if (effectiveBias <= 2 && pace === 3) {
                         if (baseScoreRef <= 60 && horse.runStyle >= 3) {
                             score += 25;
-                            alerts.push({ text: "🃏 展開有利: ハイペースのイン突き伏兵", type: "warning" });
+                            alerts.push({ text: "🃏 展開有利: 枠不問のイン突き伏兵", type: "warning" });
                         }
                     }
 
-                    // 【OMEGA 4.2】ハイペース×外伸びバイアス時の「大外強襲伏兵」 (枠順不問)
+                    // 【新規追加】OMEGA 4.2: ハイペース×外伸びバイアス時の「大外強襲」
                     if (effectiveBias >= 4 && pace === 3) {
                         if (baseScoreRef <= 65 && horse.runStyle >= 3) {
                             score += 20;
-                            alerts.push({ text: "🌪️ 展開有利: ハイペースの大外一気伏兵", type: "warning" });
+                            alerts.push({ text: "🌪️ 展開有利: 展開待ちの大外強襲伏兵", type: "warning" });
                         }
                     }
 
-                    // 【OMEGA 4.3】ドスロー時の「前残り伏兵」 (逃げ・先行／バイアス不問)
+                    // 【新規追加】OMEGA 4.3: ドスロー時の「前残り」（バイアス不問）
                     if (pace === 1) {
                         if (baseScoreRef <= 60 && horse.runStyle <= 2) {
                             score += 25;
-                            alerts.push({ text: "🐢 展開有利: スローペースの前残り伏兵", type: "warning" });
+                            alerts.push({ text: "🐢 展開有利: バイアスを無効化する前残り伏兵", type: "warning" });
                         }
                     }
 
@@ -351,10 +350,48 @@
                 });
             }, [horses, weather, bias, pace, cond, course, raceType, weatherRecovery, manualWeightDiffs]);
 
-            // ★ ピックアップ欄表示用の特注伏兵（スコア100以上 ＆ 伏兵アラートあり）
+            // 波乱度（Turbulence Level）判定ロジックの新規追加
+            const turbulenceLevel = useMemo(() => {
+                // 1〜3番人気の馬を抽出
+                const topFavorites = calculatedHorses.filter(h => h.popularity <= 3);
+                
+                // 上位人気の中に「danger（危険）」アラートを持つ馬、またはスコアが100未満の馬がいるか
+                const hasVulnerableFavorites = topFavorites.some(h => 
+                    h.alerts.some(a => a.type === 'danger') || h.score < 100
+                );
+                
+                // 極端な環境（ペースが2以外、または馬場状態が3）
+                const isExtremeEnvironment = pace !== 2 || cond === 3;
+
+                if (hasVulnerableFavorites && isExtremeEnvironment) return 'HIGH';
+                if (hasVulnerableFavorites || isExtremeEnvironment) return 'MEDIUM';
+                return 'LOW';
+            }, [calculatedHorses, pace, cond]);
+
+            // 特注伏兵（ジョーカー）枠の抽出フィルター ＆ バリュー指数ソート
             const darkHorses = useMemo(() => {
-                return calculatedHorses.filter(h => h.score >= 100 && h.alerts.some(a => a.text.includes("伏兵")));
-            }, [calculatedHorses]);
+                // 「伏兵」アラートを持つ馬を抽出
+                let candidates = calculatedHorses.filter(h => 
+                    h.alerts.some(a => a.text.includes("伏兵"))
+                );
+
+                // 波乱度に応じてスコアの足切りを変動
+                if (turbulenceLevel === 'LOW') {
+                    candidates = candidates.filter(h => h.score >= 90);
+                } else if (turbulenceLevel === 'MEDIUM') {
+                    candidates = candidates.filter(h => h.score >= 60);
+                }
+                // HIGHの場合はスコア不問（足切りなし）
+
+                // 各馬に「バリュー指数（スコア × 想定オッズ）」を付与して降順ソート
+                const sortedCandidates = candidates.map(h => ({
+                    ...h,
+                    valueIndex: h.score * (h.odds || 0)
+                })).sort((a, b) => b.valueIndex - a.valueIndex);
+
+                // バリュー指数が最も高い上位2頭を抽出
+                return sortedCandidates.slice(0, 2);
+            }, [calculatedHorses, turbulenceLevel]);
 
             // ★ SNSシェアの5枠目（☆）に特注伏兵を自動セットするロジック
             useEffect(() => {
@@ -594,13 +631,25 @@
 
                         <div className="lg:col-span-8">
                             
-                            {/* ★ アイデア1: 特注伏兵専用ピックアップ欄 */}
+                            {/* ★ アイデア1: 特注伏兵専用ピックアップ欄（波乱度バッジ追加） */}
                             {darkHorses.length > 0 && (
                                 <div className="bg-slate-900/90 p-4 rounded-lg border border-rose-500/50 mb-6 shadow-[0_0_15px_rgba(244,63,94,0.15)] relative overflow-hidden">
                                     <div className="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
-                                    <h3 className="text-rose-400 font-bold text-sm mb-3 flex items-center">
-                                        <span className="text-lg mr-2 animate-pulse">🔥</span> 穴馬アラート：展開特注の伏兵（ヒモ穴推奨）
-                                    </h3>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h3 className="text-rose-400 font-bold text-sm flex items-center">
+                                            <span className="text-lg mr-2 animate-pulse">🔥</span> 穴馬アラート：展開特注の伏兵（ヒモ穴推奨）
+                                        </h3>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-slate-400">想定波乱度:</span>
+                                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                                                turbulenceLevel === 'HIGH' ? 'bg-rose-900 text-rose-300 border border-rose-500' :
+                                                turbulenceLevel === 'MEDIUM' ? 'bg-amber-900 text-amber-300 border border-amber-500' :
+                                                'bg-emerald-900 text-emerald-300 border border-emerald-500'
+                                            }`}>
+                                                {turbulenceLevel}
+                                            </span>
+                                        </div>
+                                    </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         {darkHorses.map(horse => (
                                             <div key={`dark-${horse.no}`} onClick={() => setSelectedHorseId(horse.no)} className="bg-slate-800 border border-rose-500/30 p-2 rounded flex justify-between items-center cursor-pointer hover:bg-slate-700 transition-colors">
@@ -666,7 +715,6 @@
                                         </button>
                                     )}
                                 </div>
-                                {/* ★ アイデア2: 5枠目（☆）を追加 */}
                                 <div className="grid grid-cols-5 gap-2">
                                     {['◎', '◯', '▲', '△', '☆'].map((mark, i) => (
                                         <div key={mark} className="flex flex-col">
