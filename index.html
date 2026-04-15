@@ -41,7 +41,9 @@
 【重要：出力形式について】
 スプレッドシートの1つのセルにそのまま貼り付けられるように、JSONの改行やインデント（空白）をすべて削除し、完全に「1行の文字列（Minified JSON）」として出力してください。
 
-{"race":{"updatedAt":"2026/04/09","date":"2026/04/12","raceName":"桜花賞(G1)","location":"阪神","courseName":"芝1600m (外回り)","raceType":"3yo","course":3,"weather":"sunny","bias":3,"pace":2,"cond":2},"horses":[{"no":1,"name":"馬の名前","frame":1,"runStyle":2,"odds":5.5,"baseScore":65,"optBias":3,"optPace":2,"optCond":2,"optCourse":2,"spurt":3,"jockeyName":"川田将雅","jockeyClass":"A","specialJockey":true,"popularity":3,"weightDiff":0,"isTransport":true,"pedigreeApt":"A","tags":["内枠・先行適性◎", "揉まれ弱さ"],"isMarked":true}]}
+⚠️【警告】以下のJSONは「データ構造のサンプル」です。中の値（レース名、騎手名、数値など）に絶対に引っ張られず、必ず「今回あなたが分析・予測した実際のデータ」を当てはめて出力してください。サンプルの丸写しは厳禁です。
+
+{"race":{"updatedAt":"YYYY/MM/DD","date":"YYYY/MM/DD","raceName":"実際のレース名","location":"競馬場名","courseName":"コース詳細","raceType":"3yo","course":3,"weather":"sunny","bias":3,"pace":2,"cond":2},"horses":[{"no":1,"name":"実際の馬名","frame":1,"runStyle":2,"odds":5.5,"baseScore":65,"optBias":3,"optPace":2,"optCond":2,"optCourse":2,"spurt":3,"jockeyName":"実際の騎手名","jockeyClass":"A","specialJockey":true,"popularity":3,"weightDiff":0,"isTransport":true,"pedigreeApt":"A","tags":["内枠・先行適性◎", "揉まれ弱さ"],"isMarked":true}]}
 
 【各項目のルール】
 [race]
@@ -329,20 +331,14 @@
                     }
 
                     // 【新規追加】激流ロンスパサバイバル（持続力ハック）
-                    // ペースが3（激流）の際、スタミナと持続力が問われるサバイバル戦になるため、spurt値が4以上の馬を上方修正する。
                     if (pace === 3 && horse.spurt >= 4) {
-                        // 激流を耐え抜く基礎的な持続力ボーナス
                         score += 15;
-                        
-                        // タグに特定のキーワード（瞬発力、底力、持続力など）があればさらに追加加点
                         const hasStaminaTag = processedTags.some(t => 
                             t.includes("瞬発力") || t.includes("底力") || t.includes("持続力") || t.includes("タフ")
                         );
                         if (hasStaminaTag) {
                             score += 10;
                         }
-
-                        // 伏兵抽出フィルターに引っ掛けるため、アラート文言に「伏兵」を含める
                         alerts.push({ text: "🌪️ 展開有利: 激流サバイバル適合の伏兵", type: "warning" });
                     }
 
@@ -368,17 +364,12 @@
                 });
             }, [horses, weather, bias, pace, cond, course, raceType, weatherRecovery, manualWeightDiffs]);
 
-            // 波乱度（Turbulence Level）判定ロジックの新規追加
+            // 波乱度（Turbulence Level）判定ロジック
             const turbulenceLevel = useMemo(() => {
-                // 1〜3番人気の馬を抽出
                 const topFavorites = calculatedHorses.filter(h => h.popularity <= 3);
-                
-                // 上位人気の中に「danger（危険）」アラートを持つ馬、またはスコアが100未満の馬がいるか
                 const hasVulnerableFavorites = topFavorites.some(h => 
                     h.alerts.some(a => a.type === 'danger') || h.score < 100
                 );
-                
-                // 極端な環境（ペースが2以外、または馬場状態が3）
                 const isExtremeEnvironment = pace !== 2 || cond === 3;
 
                 if (hasVulnerableFavorites && isExtremeEnvironment) return 'HIGH';
@@ -388,42 +379,33 @@
 
             // 特注伏兵（ジョーカー）枠の抽出フィルター ＆ バリュー指数ソート
             const darkHorses = useMemo(() => {
-                // 「伏兵」アラートを持つ馬を抽出
                 let candidates = calculatedHorses.filter(h => 
                     h.alerts.some(a => a.text.includes("伏兵"))
                 );
 
-                // 波乱度に応じてスコアの足切りを変動
                 if (turbulenceLevel === 'LOW') {
                     candidates = candidates.filter(h => h.score >= 90);
                 } else if (turbulenceLevel === 'MEDIUM') {
                     candidates = candidates.filter(h => h.score >= 60);
                 }
-                // HIGHの場合はスコア不問（足切りなし）
 
-                // 各馬に「バリュー指数（スコア × 想定オッズ）」を付与して降順ソート
                 const sortedCandidates = candidates.map(h => ({
                     ...h,
                     valueIndex: h.score * (h.odds || 0)
                 })).sort((a, b) => b.valueIndex - a.valueIndex);
 
-                // バリュー指数が最も高い上位2頭を抽出
                 return sortedCandidates.slice(0, 2);
             }, [calculatedHorses, turbulenceLevel]);
 
-            // ★ SNSシェアの5枠目（☆）に特注伏兵を自動セットするロジック
             useEffect(() => {
                 if (!isCustomPrediction && calculatedHorses.length >= 4) {
                     const top4 = calculatedHorses.slice(0, 4).map(h => h.no);
-                    
-                    // 伏兵がいれば最上位の馬を☆に、いなければ単純にランキング5位の馬を☆にセット
                     let starVal = '';
                     if (darkHorses.length > 0) {
                         starVal = darkHorses[0].no;
                     } else if (calculatedHorses.length >= 5) {
                         starVal = calculatedHorses[4].no;
                     }
-                    
                     setCustomPredictions([...top4, starVal]);
                 }
             }, [calculatedHorses, isCustomPrediction, darkHorses]);
@@ -479,7 +461,6 @@
                 const generateText = (includeScore, includeFrame) => {
                     let t = "";
                     if (isCustomPrediction) {
-                        // パターンB: 独自予想
                         t = `【${raceInfo.raceName} 予想】\n\n`;
                         customPredictions.forEach((horseNo, idx) => {
                             if (!horseNo) return; // 空枠の場合はスキップ
@@ -490,11 +471,9 @@
                             }
                         });
                     } else {
-                        // パターンA: シミュレーション結果
                         t = `【${raceInfo.raceName} 予想】\n`;
                         t += `${weatherIcon}${getPaceText(pace)}・${getCondText(cond)} 想定\n\n`;
                         
-                        // 上位4頭 ＋ ☆枠（特注伏兵 または 5位）
                         customPredictions.forEach((horseNo, idx) => {
                             if (!horseNo) return;
                             const h = horses.find(h => h.no === horseNo);
@@ -509,15 +488,12 @@
                     return t;
                 };
 
-                // 【レベル1】全情報を載せる
                 let text = generateText(true, true);
 
-                // 【レベル2】URLの23文字を考慮し、全角140文字（長さ目安250）を超える場合はスコアを削る
                 if (getTwitterLength(text) > 250 && !isCustomPrediction) {
                     text = generateText(false, true);
                 }
 
-                // 【レベル3】それでも超える場合は枠・馬番も削る
                 if (getTwitterLength(text) > 250) {
                     text = generateText(false, false);
                 }
