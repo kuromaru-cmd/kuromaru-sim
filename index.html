@@ -328,6 +328,24 @@
                         }
                     }
 
+                    // 【新規追加】激流ロンスパサバイバル（持続力ハック）
+                    // ペースが3（激流）の際、スタミナと持続力が問われるサバイバル戦になるため、spurt値が4以上の馬を上方修正する。
+                    if (pace === 3 && horse.spurt >= 4) {
+                        // 激流を耐え抜く基礎的な持続力ボーナス
+                        score += 15;
+                        
+                        // タグに特定のキーワード（瞬発力、底力、持続力など）があればさらに追加加点
+                        const hasStaminaTag = processedTags.some(t => 
+                            t.includes("瞬発力") || t.includes("底力") || t.includes("持続力") || t.includes("タフ")
+                        );
+                        if (hasStaminaTag) {
+                            score += 10;
+                        }
+
+                        // 伏兵抽出フィルターに引っ掛けるため、アラート文言に「伏兵」を含める
+                        alerts.push({ text: "🌪️ 展開有利: 激流サバイバル適合の伏兵", type: "warning" });
+                    }
+
                     // 血統適性ロジック
                     if (horse.pedigreeApt === 'S') {
                         if (baseScoreRef < 70) { score += 10; } else { score += 5; }
@@ -631,7 +649,7 @@
 
                         <div className="lg:col-span-8">
                             
-                            {/* ★ アイデア1: 特注伏兵専用ピックアップ欄（波乱度バッジ追加） */}
+                            {/* ★ 特注伏兵専用ピックアップ欄（波乱度バッジ追加） */}
                             {darkHorses.length > 0 && (
                                 <div className="bg-slate-900/90 p-4 rounded-lg border border-rose-500/50 mb-6 shadow-[0_0_15px_rgba(244,63,94,0.15)] relative overflow-hidden">
                                     <div className="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
