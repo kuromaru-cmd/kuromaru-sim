@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>黒マル式 資金配分シミュレーター V3.12 (UI＆ヘルプ完成版)</title>
+    <title>黒マル式 資金配分シミュレーター V3.13</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -59,7 +59,7 @@
             const [currentRaceIndex, setCurrentRaceIndex] = useState(0);
             const [horses, setHorses] = useState([]);
             const [oddsData, setOddsData] = useState({});
-            const [raceInfo, setRaceInfo] = useState({ date: "Unknown", raceName: "読込中...", location: "Unknown", updatedAt: "Unknown" });
+            const [raceInfo, setRaceInfo] = useState({ date: "", raceName: "読込中...", location: "", updatedAt: "-" });
             const [isLoading, setIsLoading] = useState(true);
 
             const [horseMarks, setHorseMarks] = useState({});
@@ -71,7 +71,6 @@
             const [results, setResults] = useState([]);
             const [summary, setSummary] = useState({ totalBet: 0, syntheticOdds: 0 });
 
-            // ポップアップの制御ステート
             const [showHelpModal, setShowHelpModal] = useState(false);
             const [showStep1HelpModal, setShowStep1HelpModal] = useState(false);
             const [expandedGroups, setExpandedGroups] = useState({}); 
@@ -101,10 +100,10 @@
                 setHorses(data.horses || []);
                 setOddsData(data.oddsData || {});
                 setRaceInfo({
-                    date: data.race?.date || "Unknown",
-                    raceName: data.race?.raceName || "Unknown",
-                    location: data.race?.location || "Unknown",
-                    updatedAt: data.race?.updatedAt || "Unknown"
+                    date: data.race?.date || "",
+                    raceName: data.race?.raceName || "名称未設定",
+                    location: data.race?.location || "",
+                    updatedAt: data.race?.updatedAt || "-"
                 });
                 
                 const initialMarks = {};
@@ -331,7 +330,6 @@
                 return Object.keys(typesObj)
                     .filter(t => typesObj[t].length > 0)
                     .map(t => {
-                        // 合計購入金額の計算
                         const totalAmount = typesObj[t].reduce((sum, g) => sum + (g.betAmount * g.items.length), 0);
                         return {
                             type: t,
@@ -362,7 +360,10 @@
                         <div className="mt-4 glass-panel rounded-xl p-3">
                             <select value={currentRaceIndex} onChange={handleRaceChange} className="glass-input w-full p-2 rounded text-sm font-bold outline-none">
                                 {allRacesData.map((data, idx) => (
-                                    <option key={idx} value={idx} className="bg-slate-900">{data?.race?.raceName || 'Unknown'} ({data?.race?.location || 'Unknown'})</option>
+                                    <option key={idx} value={idx} className="bg-slate-900">
+                                        {data?.race?.raceName || '名称未設定'}
+                                        {data?.race?.location ? ` (${data.race.location})` : ''}
+                                    </option>
                                 ))}
                             </select>
                         </div>
