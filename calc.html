@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>黒マル式 資金配分シミュレーター V3.13</title>
+    <title>黒マル式 資金配分シミュレーター V3.14 (スマホ最適化＆リセット機能)</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -118,6 +118,17 @@
                 const idx = Number(e.target.value);
                 setCurrentRaceIndex(idx);
                 loadRaceData(allRacesData[idx]);
+            };
+
+            const handleResetMarks = () => {
+                if(window.confirm("印と買い目をすべてリセットしますか？")) {
+                    const resetMarks = {};
+                    horses.forEach(h => resetMarks[h.no] = '');
+                    setHorseMarks(resetMarks);
+                    setFormation({});
+                    setGeneratedBets([]);
+                    setResults([]);
+                }
             };
 
             const currentDoubleCircleCount = Object.values(horseMarks).filter(m => m === '◎').length;
@@ -372,11 +383,16 @@
                     {/* STEP 1 */}
                     <section className="glass-panel rounded-2xl p-5 mb-6 relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-1 h-full bg-purple-400"></div>
-                        <h2 className="text-sm font-bold text-purple-300 mb-4 flex items-center">
-                            <span className="bg-purple-900/50 px-2 py-0.5 rounded mr-2 text-[10px]">STEP 1</span> 
-                            出走馬の印（予想）
-                            <button onClick={() => setShowStep1HelpModal(true)} className="ml-3 bg-slate-800 text-purple-200 border border-purple-500/50 px-2 py-0.5 rounded text-[10px] font-bold hover:bg-slate-700 transition-colors">❓ 印の意味</button>
-                        </h2>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-sm font-bold text-purple-300 flex items-center">
+                                <span className="bg-purple-900/50 px-2 py-0.5 rounded mr-2 text-[10px]">STEP 1</span> 
+                                出走馬の印（予想）
+                                <button onClick={() => setShowStep1HelpModal(true)} className="ml-3 bg-slate-800 text-purple-200 border border-purple-500/50 px-2 py-0.5 rounded text-[10px] font-bold hover:bg-slate-700 transition-colors">❓ 印の意味</button>
+                            </h2>
+                            <button onClick={handleResetMarks} className="bg-slate-800/80 text-rose-300 border border-rose-500/50 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-900/50 transition-colors">
+                                🔄 リセット
+                            </button>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
                             {horses.map(horse => {
                                 const mark = horseMarks[horse.no] || '';
@@ -520,14 +536,16 @@
                                                         <div key={group.key} className="bg-gradient-to-r from-black/40 to-slate-900/40 border border-white/10 rounded-lg overflow-hidden">
                                                             <div 
                                                                 onClick={() => toggleGroup(group.key)} 
-                                                                className="p-3 cursor-pointer hover:bg-white/5 flex justify-between items-center transition-colors"
+                                                                className="p-3 cursor-pointer hover:bg-white/5 flex flex-col sm:flex-row sm:justify-between sm:items-center transition-colors gap-2"
                                                             >
                                                                 <div className="flex items-center flex-wrap gap-y-1 flex-1">
-                                                                    <span className="text-cyan-300 font-bold text-sm">{group.labelElements.axis}</span>
-                                                                    {group.labelElements.tails && <span className="text-cyan-300 font-bold ml-1">- {group.labelElements.tails}</span>}
-                                                                    <span className="text-slate-500 text-[10px] ml-2">({group.labelElements.count}点)</span>
+                                                                    <span className="text-cyan-300 font-bold text-sm">
+                                                                        {group.labelElements.axis}
+                                                                        {group.labelElements.tails && ` - ${group.labelElements.tails}`}
+                                                                    </span>
+                                                                    <span className="text-slate-500 text-[10px] ml-2 mt-0.5">({group.labelElements.count}点)</span>
                                                                 </div>
-                                                                <div className="flex items-center ml-2 flex-shrink-0">
+                                                                <div className="flex items-center sm:ml-2 flex-shrink-0 self-end sm:self-auto">
                                                                     <span className="text-yellow-400 font-bold mr-2">{formatCurrency(group.betAmount)}<span className="text-[9px] ml-0.5 text-yellow-200">円/点</span></span>
                                                                     <span className="text-slate-500 text-[10px] w-10 text-right">{expandedGroups[group.key] ? '▲' : '▼ 詳細'}</span>
                                                                 </div>
@@ -535,11 +553,11 @@
                                                             {expandedGroups[group.key] && (
                                                                 <div className="bg-black/20 p-2 border-t border-white/5 space-y-1 animate-fade-in">
                                                                     {group.items.map(res => (
-                                                                        <div key={res.id} className="flex justify-between items-center text-[10px] p-2 border-b border-white/5 last:border-0">
-                                                                            <div className="text-cyan-100 font-bold">{res.combo.join(' - ')} <span className="font-normal text-slate-400 ml-1">({res.odds}倍)</span></div>
-                                                                            <div className="flex gap-3 text-right">
-                                                                                <div className="text-slate-400">想定払戻: <span className="text-white font-bold ml-1">{formatCurrency(res.payout)}円</span></div>
-                                                                                <div className="text-slate-400 w-24">想定利益: <span className={`font-bold ml-1 ${res.profit < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{res.profit < 0 ? '▲ ' : '+ '}{formatCurrency(Math.abs(res.profit))}円</span></div>
+                                                                        <div key={res.id} className="flex flex-col sm:flex-row justify-between sm:items-center text-[10px] p-2 border-b border-white/5 last:border-0 gap-1">
+                                                                            <div className="text-cyan-100 font-bold leading-tight">{res.combo.join(' - ')} <span className="font-normal text-slate-400 ml-1">({res.odds}倍)</span></div>
+                                                                            <div className="flex flex-col sm:flex-row sm:gap-3 text-right">
+                                                                                <div className="text-slate-400 text-[9px] sm:text-[10px]">想定払戻: <span className="text-white font-bold text-[10px] ml-1">{formatCurrency(res.payout)}円</span></div>
+                                                                                <div className="text-slate-400 text-[9px] sm:text-[10px] sm:w-24">想定利益: <span className={`font-bold text-[10px] ml-1 ${res.profit < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{res.profit < 0 ? '▲ ' : '+ '}{formatCurrency(Math.abs(res.profit))}円</span></div>
                                                                             </div>
                                                                         </div>
                                                                     ))}
