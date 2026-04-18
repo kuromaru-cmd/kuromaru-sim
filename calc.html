@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>黒マル式 資金配分シミュレーター V3.15</title>
+    <title>黒マル式 資金配分シミュレーター V3.16 (ロジック改修版)</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -234,44 +234,72 @@
                 const sumInverseOdds = validBets.reduce((acc, bet) => acc + (1 / parseFloat(bet.odds)), 0);
                 const synthOddsCalc = sumInverseOdds > 0 ? 1 / sumInverseOdds : 0;
 
-                if (logic === 'equal') {
-                    let totalAllocated = 0;
-                    let remainders = validBets.map(bet => {
-                        const ideal = numBudget * ((1 / parseFloat(bet.odds)) / sumInverseOdds);
+                // 均等分配用のヘルパー関数
+                const calcEqualDistribution = (betsList, totalFund) => {
+                    const sumInv = betsList.reduce((acc, bet) => acc + (1 / parseFloat(bet.odds)), 0);
+                    let allocated = 0;
+                    let remainders = betsList.map(bet => {
+                        const ideal = totalFund * ((1 / parseFloat(bet.odds)) / sumInv);
                         const floored = Math.floor(ideal / 100) * 100;
-                        totalAllocated += floored;
+                        allocated += floored;
                         return { ...bet, floored, remainder: ideal - floored, odds: parseFloat(bet.odds) };
                     });
-                    let leftover = numBudget - totalAllocated;
+                    let remFund = totalFund - allocated;
                     remainders.sort((a, b) => b.remainder - a.remainder).forEach(r => {
-                        if (leftover >= 100) { r.floored += 100; leftover -= 100; }
+                        if (remFund >= 100) { r.floored += 100; remFund -= 100; }
                     });
-                    newResults = remainders.map(r => ({ ...r, betAmount: r.floored }));
-                } else {
-                    let totalCover = 0;
-                    const baseAlloc = validBets.map(bet => {
+                    return remainders.map(r => ({ id: r.id, addedAmount: r.floored }));
+                };
+
+                let effectiveLogic = logic;
+                let baseAllocations = [];
+                let totalCover = 0;
+
+                if (logic !== 'equal') {
+                    baseAllocations = validBets.map(bet => {
                         const odds = parseFloat(bet.odds);
                         const minCover = Math.ceil(numBudget / odds / 100) * 100;
                         totalCover += minCover;
                         return { ...bet, amount: minCover, odds };
                     });
+                    
+                    // 予算内でトリガミ回避が不可能な場合は equal にフォールバックする
                     if (totalCover > numBudget) {
-                        let current = 0;
-                        newResults = baseAlloc.map(t => {
-                            if (current + t.amount <= numBudget) { current += t.amount; return { ...t, betAmount: t.amount }; }
-                            return { ...t, betAmount: 0 };
+                        effectiveLogic = 'equal';
+                    }
+                }
+
+                if (effectiveLogic === 'equal') {
+                    const eqDist = calcEqualDistribution(validBets, numBudget);
+                    newResults = validBets.map(bet => {
+                        const dist = eqDist.find(d => d.id === bet.id);
+                        return { ...bet, odds: parseFloat(bet.odds), betAmount: dist ? dist.addedAmount : 0 };
+                    });
+                } else {
+                    // 余剰資金の算出
+                    const leftover = Math.floor((numBudget - totalCover) / 100) * 100;
+                    
+                    // ターゲットグループの選定
+                    let targetBets = [];
+                    if (logic === 'gami-favorite') {
+                        targetBets = validBets.filter(b => b.type !== '枠連' && b.combo.some(no => horseMarks[no] === '◎'));
+                    } else if (logic === 'gami-longshot') {
+                        targetBets = validBets.filter(b => b.type !== '枠連' && b.combo.some(no => horseMarks[no] === '☆'));
+                    }
+                    
+                    if (targetBets.length === 0) {
+                        targetBets = validBets;
+                    }
+
+                    // 余剰資金をターゲットグループ内でプロフィットシェア分配
+                    if (leftover > 0) {
+                        const extraDist = calcEqualDistribution(targetBets, leftover);
+                        newResults = baseAllocations.map(alloc => {
+                            const ext = extraDist.find(d => d.id === alloc.id);
+                            return { ...alloc, betAmount: alloc.amount + (ext ? ext.addedAmount : 0) };
                         });
                     } else {
-                        let targetId = validBets[0].id;
-                        if (logic === 'gami-favorite') {
-                            const favBets = baseAlloc.filter(b => b.type !== '枠連' && b.combo.some(no => horseMarks[no] === '◎'));
-                            targetId = (favBets.length > 0 ? favBets : baseAlloc).sort((a,b) => a.odds - b.odds)[0].id;
-                        } else if (logic === 'gami-longshot') {
-                            const holeBets = baseAlloc.filter(b => b.type !== '枠連' && b.combo.some(no => horseMarks[no] === '☆'));
-                            targetId = (holeBets.length > 0 ? holeBets : baseAlloc).sort((a,b) => b.odds - a.odds)[0].id;
-                        }
-                        const leftover = Math.floor((numBudget - totalCover) / 100) * 100;
-                        newResults = baseAlloc.map(t => ({ ...t, betAmount: t.id === targetId ? t.amount + leftover : t.amount }));
+                        newResults = baseAllocations.map(alloc => ({ ...alloc, betAmount: alloc.amount }));
                     }
                 }
 
