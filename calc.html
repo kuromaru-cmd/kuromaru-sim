@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>黒マル式 資金配分シミュレーター V3.16 (ロジック改修版)</title>
+    <title>黒マル式 資金配分シミュレーター V3.17 (API連携追加版)</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -55,6 +55,9 @@
         const formatCurrency = (num) => new Intl.NumberFormat('ja-JP').format(num);
 
         const App = () => {
+            const ODDS_API_URL = "https://script.google.com/macros/s/AKfycbxuZiyB_2BSGaBMagz_9CVvJfKTYz5dGnW9CCAKKgr5S2I-5XT3YTQgJc3yRyGeDdw8/exec";
+            const [isFetchingOdds, setIsFetchingOdds] = useState(false);
+
             const [allRacesData, setAllRacesData] = useState([]);
             const [currentRaceIndex, setCurrentRaceIndex] = useState(0);
             const [horses, setHorses] = useState([]);
@@ -128,6 +131,30 @@
                     setFormation({});
                     setGeneratedBets([]);
                     setResults([]);
+                }
+            };
+
+            const fetchLatestOdds = async () => {
+                setIsFetchingOdds(true);
+                try {
+                    const response = await fetch(ODDS_API_URL);
+                    const result = await response.json();
+                    
+                    if (result.status === "success" && result.data) {
+                        const updatedHorses = horses.map(horse => {
+                            const fetchedHorse = result.data.find(d => d.no === horse.no);
+                            return fetchedHorse ? { ...horse, odds: fetchedHorse.odds } : horse;
+                        });
+                        setHorses(updatedHorses);
+                        alert("最新のオッズを読み込みました！");
+                    } else {
+                        alert("データの取得に失敗しました。");
+                    }
+                } catch (error) {
+                    console.error("Odds fetch error:", error);
+                    alert("API通信エラーが発生しました。");
+                } finally {
+                    setIsFetchingOdds(false);
                 }
             };
 
@@ -425,6 +452,22 @@
                                 </button>
                             </div>
                         </div>
+
+                        <div className="flex justify-end mb-2">
+                            <button 
+                                onClick={fetchLatestOdds} 
+                                disabled={isFetchingOdds}
+                                className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-bold text-sm transition-colors ${
+                                    isFetchingOdds 
+                                    ? "bg-slate-700 text-slate-400 cursor-not-allowed" 
+                                    : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                                }`}
+                            >
+                                <span>🔄</span>
+                                <span>{isFetchingOdds ? "オッズ取得中..." : "最新オッズを自動取得"}</span>
+                            </button>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
                             {horses.map(horse => {
                                 const mark = horseMarks[horse.no] || '';
