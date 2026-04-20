@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>黒マル式 資金配分シミュレーター V3.23 (同期ゲートキーパー完全版)</title>
+    <title>黒マル式 資金配分シミュレーター V3.24 (最終デプロイ確認版)</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -102,7 +102,6 @@
                         setAllRacesData([result]);
                         loadRaceData(result);
                     } else {
-                        // キャッシュがない場合はバックアップ（旧データ）を見に行く
                         await fetchFallbackData();
                     }
                 } catch (e) {
@@ -493,7 +492,7 @@
                                 }`}
                             >
                                 <span>{isFetchingOdds ? "🔄" : "⬇️"}</span>
-                                <span>{isFetchingOdds ? "オッズ取得中..." : "最新オッズを取得（同期判定付）"}</span>
+                                <span>{isFetchingOdds ? "オッズ取得中..." : "最新オッズを取得"}</span>
                             </button>
                         </div>
 
