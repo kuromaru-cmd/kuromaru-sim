@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>黒マル式 資金配分シミュレーター V3.22 </title>
+    <title>黒マル式 資金配分シミュレーター V3.23 (同期ゲートキーパー完全版)</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -66,7 +66,6 @@
             const [raceInfo, setRaceInfo] = useState({ date: "", raceName: "読込中...", location: "", updatedAt: "-" });
             const [isLoading, setIsLoading] = useState(true);
 
-            // 【修正】ローカルファイル実行時（file://）のセキュリティブロックを回避
             const [targetRaceId, setTargetRaceId] = useState(() => {
                 try {
                     return localStorage.getItem('kuromaru_race_id') || ADMIN_DEFAULT_RACE_ID;
@@ -92,8 +91,27 @@
             const allAvailableTypes = ['単勝', '複勝', '枠連', '馬連', '馬単', 'ワイド', '3連複', '3連単'];
 
             useEffect(() => {
-                fetchLatestOdds(true); 
+                fetchInitialCache(); 
             }, []);
+
+            const fetchInitialCache = async () => {
+                try {
+                    const response = await fetch(`${ODDS_API_URL}?action=read`);
+                    const result = await response.json();
+                    if (result.horses && result.oddsData) {
+                        setAllRacesData([result]);
+                        loadRaceData(result);
+                    } else {
+                        // キャッシュがない場合はバックアップ（旧データ）を見に行く
+                        await fetchFallbackData();
+                    }
+                } catch (e) {
+                    console.error("Cache load failed", e);
+                    await fetchFallbackData();
+                } finally {
+                    setIsLoading(false);
+                }
+            };
 
             const loadRaceData = (data) => {
                 if (!data) return;
@@ -102,7 +120,7 @@
                 setRaceInfo({
                     date: data.race?.date || "",
                     raceName: data.race?.raceName || "名称未設定",
-                    location: data.race?.location || "",
+                    location: data.race?.location === "自動取得" ? "" : (data.race?.location || ""),
                     updatedAt: data.race?.updatedAt || "-"
                 });
                 
@@ -143,15 +161,14 @@
                 }
             };
 
-            const fetchLatestOdds = async (isInitialLoad = false) => {
+            const fetchLatestOdds = async () => {
                 if (!targetRaceId || targetRaceId.length === 0) {
-                    if (!isInitialLoad) alert("レースIDを入力してください。");
+                    alert("レースIDを入力してください。");
                     return;
                 }
 
                 setIsFetchingOdds(true);
                 
-                // 【修正】ローカルファイル実行時のセキュリティブロックを回避
                 try {
                     localStorage.setItem('kuromaru_race_id', targetRaceId);
                 } catch (error) {
@@ -159,34 +176,22 @@
                 }
                 
                 try {
-                    const response = await fetch(`${ODDS_API_URL}?race_id=${targetRaceId}`);
+                    const response = await fetch(`${ODDS_API_URL}?race_id=${targetRaceId}&admin_id=${ADMIN_DEFAULT_RACE_ID}`);
                     const result = await response.json();
                     
                     if (result.horses && result.oddsData) {
                         setAllRacesData([result]); 
                         loadRaceData(result);
                         
-                        if (!isInitialLoad) {
-                            alert(`最新の【${result.modeInfo}】オッズを読み込みました！`);
-                        }
+                        alert(`【${result.modeInfo}】読み込み完了！\n${targetRaceId === ADMIN_DEFAULT_RACE_ID ? "ドライブへ同期しました" : "単発取得（ドライブ未更新）"}`);
                     } else {
-                        if (isInitialLoad) {
-                            console.warn("API取得に失敗したため、バックアップを読み込みます:", result.message);
-                            await fetchFallbackData();
-                        } else {
-                            alert("データの取得に失敗しました: " + (result.message || ""));
-                        }
+                        alert("データの取得に失敗しました: " + (result.message || ""));
                     }
                 } catch (error) {
                     console.error("Odds fetch error:", error);
-                    if (isInitialLoad) {
-                        await fetchFallbackData();
-                    } else {
-                        alert("API通信エラーが発生しました。");
-                    }
+                    alert("API通信エラーが発生しました。");
                 } finally {
                     setIsFetchingOdds(false);
-                    if (isInitialLoad) setIsLoading(false); 
                 }
             };
 
@@ -421,7 +426,7 @@
 
             const markedHorsesKeys = Object.keys(horseMarks).filter(k => horseMarks[k] !== '');
 
-            if (isLoading) return <div className="min-h-screen flex items-center justify-center font-mono-custom text-purple-300">SYSTEM LOADING...</div>;
+            if (isLoading) return <div className="min-h-screen flex items-center justify-center font-mono-custom text-purple-300 tracking-widest animate-pulse">DRIVE CACHE LOADING...</div>;
 
             return (
                 <div className="max-w-md mx-auto md:max-w-2xl px-4 py-8 relative">
@@ -431,13 +436,13 @@
                             <button onClick={() => setShowHelpModal(true)} className="ml-auto bg-slate-800 text-slate-300 border border-slate-600 px-2 py-0.5 rounded text-[10px] font-bold hover:bg-slate-700 transition-colors">❓ 使い方</button>
                         </div>
                         <h1 className="text-2xl font-black text-white">資金配分シミュレーター</h1>
-                        <p className="text-[10px] text-slate-400 mt-1 font-mono-custom">オッズ最終取得日時：{raceInfo.updatedAt}</p>
+                        <p className="text-[10px] text-slate-400 mt-1 font-mono-custom">最終同期日時：{raceInfo.updatedAt}</p>
                     </header>
 
                     <section className="glass-panel rounded-2xl p-4 mb-6 relative border-cyan-500/30 overflow-visible z-10">
                         <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2 flex-1">
-                                <span className="text-xs font-bold text-cyan-300 shrink-0">レースID</span>
+                                <span className="text-xs font-bold text-cyan-300 shrink-0">検証ID</span>
                                 <input 
                                     type="text" 
                                     value={targetRaceId} 
@@ -448,10 +453,10 @@
                                 />
                             </div>
                             <button onClick={() => setShowRaceIdHelpModal(true)} className="shrink-0 bg-slate-800 text-cyan-200 border border-cyan-500/50 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors">
-                                ❓ IDの調べ方
+                                ❓ 調べる
                             </button>
                         </div>
-                        <p className="text-[10px] text-slate-400 mt-2 ml-1">※IDは自動保存されます。<br/>※変更した場合は下の「最新オッズを自動取得」を押してください。</p>
+                        <p className="text-[9px] text-slate-500 mt-2 ml-1">※検証IDが <span className="text-cyan-300">{ADMIN_DEFAULT_RACE_ID}</span> の時のみドライブへ同期します。</p>
                     </section>
 
                     <section className="glass-panel rounded-2xl p-5 mb-6 relative overflow-hidden">
@@ -479,7 +484,7 @@
 
                         <div className="flex justify-end mb-2">
                             <button 
-                                onClick={() => fetchLatestOdds(false)} 
+                                onClick={fetchLatestOdds} 
                                 disabled={isFetchingOdds}
                                 className={`flex items-center space-x-2 px-4 py-3 rounded-lg font-bold text-sm transition-colors w-full justify-center ${
                                     isFetchingOdds 
@@ -488,7 +493,7 @@
                                 }`}
                             >
                                 <span>{isFetchingOdds ? "🔄" : "⬇️"}</span>
-                                <span>{isFetchingOdds ? "オッズ取得中..." : "上のIDから最新オッズを自動取得"}</span>
+                                <span>{isFetchingOdds ? "オッズ取得中..." : "最新オッズを取得（同期判定付）"}</span>
                             </button>
                         </div>
 
