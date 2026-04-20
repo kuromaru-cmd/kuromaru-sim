@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>黒マル式 資金配分シミュレーター V3.18 (完全自動化版)</title>
+    <title>黒マル式 資金配分シミュレーター V3.19 (完全自動化/バグ修正版)</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -50,8 +50,6 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
 
-        const JSON_FILE_URL = "https://script.google.com/macros/s/AKfycbwoIW-y5KPtiztKzqZ8xdyDol_IYLJkws2SHhs4s3IgRmhYe5EhTMjGsAq7vLWMnnFu/exec";
-
         const formatCurrency = (num) => new Intl.NumberFormat('ja-JP').format(num);
 
         const App = () => {
@@ -80,23 +78,10 @@
 
             const allAvailableTypes = ['単勝', '複勝', '枠連', '馬連', '馬単', 'ワイド', '3連複', '3連単'];
 
+            // 【修正箇所】初期読み込み時に直接API（fetchLatestOdds）を叩き、古いドライブファイルを読まないように変更
             useEffect(() => {
-                fetchData();
+                fetchLatestOdds(true); // trueを渡すことで、初期ロード時の完了アラートを非表示にする
             }, []);
-
-            const fetchData = async () => {
-                try {
-                    const res = await fetch(JSON_FILE_URL);
-                    const data = await res.json();
-                    let validRaces = Array.isArray(data) ? data : [data];
-                    setAllRacesData(validRaces);
-                    loadRaceData(validRaces[0]);
-                } catch (e) {
-                    console.error("データの取得に失敗しました。");
-                } finally {
-                    setIsLoading(false);
-                }
-            };
 
             const loadRaceData = (data) => {
                 if (!data) return;
@@ -134,33 +119,32 @@
                 }
             };
 
-            const fetchLatestOdds = async () => {
+            // 【修正箇所】引数に isInitialLoad を追加し、初回起動時のフラグ制御を追加
+            const fetchLatestOdds = async (isInitialLoad = false) => {
                 setIsFetchingOdds(true);
                 const currentRaceId = "202606030811"; 
-                const currentRaceName = allRacesData[currentRaceIndex]?.race?.raceName || "皐月賞 (G1)";
+                const currentRaceName = "皐月賞 (G1)";
                 
                 try {
                     const response = await fetch(`${ODDS_API_URL}?race_id=${currentRaceId}&race_name=${encodeURIComponent(currentRaceName)}`);
                     const result = await response.json();
                     
                     if (result.horses && result.oddsData) {
-                        setHorses(result.horses);
-                        setOddsData(result.oddsData);
-                        setRaceInfo(result.race);
+                        setAllRacesData([result]); // セレクトボックス用に配列化してセット
+                        loadRaceData(result);
                         
-                        const initialMarks = {};
-                        result.horses.forEach(h => initialMarks[h.no] = '');
-                        setHorseMarks(initialMarks);
-                        
-                        alert(`最新の【${result.modeInfo}】オッズを読み込みました！`);
+                        if (!isInitialLoad) {
+                            alert(`最新の【${result.modeInfo}】オッズを読み込みました！`);
+                        }
                     } else {
-                        alert("データの取得に失敗しました。");
+                        if (!isInitialLoad) alert("データの取得に失敗しました: " + (result.message || ""));
                     }
                 } catch (error) {
                     console.error("Odds fetch error:", error);
-                    alert("API通信エラーが発生しました。");
+                    if (!isInitialLoad) alert("API通信エラーが発生しました。");
                 } finally {
                     setIsFetchingOdds(false);
+                    if (isInitialLoad) setIsLoading(false); // 初期表示のロード中画面を解除
                 }
             };
 
@@ -439,7 +423,7 @@
 
                         <div className="flex justify-end mb-2">
                             <button 
-                                onClick={fetchLatestOdds} 
+                                onClick={() => fetchLatestOdds(false)} 
                                 disabled={isFetchingOdds}
                                 className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-bold text-sm transition-colors ${
                                     isFetchingOdds 
