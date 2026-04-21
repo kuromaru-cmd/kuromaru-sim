@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>黒マル式 資金配分シミュレーター V3.24 (URL更新・完全版)</title>
+    <title>黒マル式 資金配分シミュレーター V4.3 (管理者専用版)</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -66,14 +66,6 @@
             const [raceInfo, setRaceInfo] = useState({ date: "", raceName: "読込中...", location: "", updatedAt: "-" });
             const [isLoading, setIsLoading] = useState(true);
 
-            const [targetRaceId, setTargetRaceId] = useState(() => {
-                try {
-                    return localStorage.getItem('kuromaru_race_id') || ADMIN_DEFAULT_RACE_ID;
-                } catch (error) {
-                    return ADMIN_DEFAULT_RACE_ID;
-                }
-            });
-
             const [horseMarks, setHorseMarks] = useState({});
             const [betTypes, setBetTypes] = useState(['馬連']);
             const [formation, setFormation] = useState({});
@@ -85,7 +77,6 @@
 
             const [showHelpModal, setShowHelpModal] = useState(false);
             const [showStep1HelpModal, setShowStep1HelpModal] = useState(false);
-            const [showRaceIdHelpModal, setShowRaceIdHelpModal] = useState(false);
             const [expandedGroups, setExpandedGroups] = useState({}); 
 
             const allAvailableTypes = ['単勝', '複勝', '枠連', '馬連', '馬単', 'ワイド', '3連複', '3連単'];
@@ -161,28 +152,17 @@
             };
 
             const fetchLatestOdds = async () => {
-                if (!targetRaceId || targetRaceId.length === 0) {
-                    alert("レースIDを入力してください。");
-                    return;
-                }
-
                 setIsFetchingOdds(true);
                 
                 try {
-                    localStorage.setItem('kuromaru_race_id', targetRaceId);
-                } catch (error) {
-                    // セキュリティエラーは無視して処理を続行
-                }
-                
-                try {
-                    const response = await fetch(`${ODDS_API_URL}?race_id=${targetRaceId}&admin_id=${ADMIN_DEFAULT_RACE_ID}`);
+                    const response = await fetch(`${ODDS_API_URL}?race_id=${ADMIN_DEFAULT_RACE_ID}&admin_id=${ADMIN_DEFAULT_RACE_ID}`);
                     const result = await response.json();
                     
                     if (result.horses && result.oddsData) {
                         setAllRacesData([result]); 
                         loadRaceData(result);
                         
-                        alert(`【${result.modeInfo}】読み込み完了！\n${targetRaceId === ADMIN_DEFAULT_RACE_ID ? "ドライブへ同期しました" : "単発取得（ドライブ未更新）"}`);
+                        alert(`【${result.modeInfo}】読み込み完了！\nドライブへ同期しました`);
                     } else {
                         alert("データの取得に失敗しました: " + (result.message || ""));
                     }
@@ -438,26 +418,6 @@
                         <p className="text-[10px] text-slate-400 mt-1 font-mono-custom">最終同期日時：{raceInfo.updatedAt}</p>
                     </header>
 
-                    <section className="glass-panel rounded-2xl p-4 mb-6 relative border-cyan-500/30 overflow-visible z-10">
-                        <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 flex-1">
-                                <span className="text-xs font-bold text-cyan-300 shrink-0">検証ID</span>
-                                <input 
-                                    type="text" 
-                                    value={targetRaceId} 
-                                    onChange={(e) => setTargetRaceId(e.target.value.replace(/[^0-9]/g, ''))} 
-                                    className="glass-input w-full p-2 rounded-lg text-sm font-bold outline-none font-mono-custom tracking-widest"
-                                    placeholder="12桁の数字を入力"
-                                    maxLength="12"
-                                />
-                            </div>
-                            <button onClick={() => setShowRaceIdHelpModal(true)} className="shrink-0 bg-slate-800 text-cyan-200 border border-cyan-500/50 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-700 transition-colors">
-                                ❓ 調べる
-                            </button>
-                        </div>
-                        <p className="text-[9px] text-slate-500 mt-2 ml-1">※検証IDが <span className="text-cyan-300">{ADMIN_DEFAULT_RACE_ID}</span> の時のみドライブへ同期します。</p>
-                    </section>
-
                     <section className="glass-panel rounded-2xl p-5 mb-6 relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-1 h-full bg-purple-400"></div>
                         
@@ -492,7 +452,7 @@
                                 }`}
                             >
                                 <span>{isFetchingOdds ? "🔄" : "⬇️"}</span>
-                                <span>{isFetchingOdds ? "オッズ取得中..." : "最新オッズを取得"}</span>
+                                <span>{isFetchingOdds ? "オッズ取得中..." : "対象レースを再取得"}</span>
                             </button>
                         </div>
 
@@ -676,32 +636,10 @@
                         </h3>
                         <div className="space-y-2 text-[10px] text-slate-400 leading-relaxed">
                             <p>・本ツールは、入力されたオッズと予算に基づく数学的な資金配分シミュレーターであり、馬券の的中や利益を保証するものではありません。</p>
-                            <p>・表示されるオッズは、前日または当日午前中に取得したオッズとなります。また、他の券種から算出した「推定値」が含まれる場合があり、実際の払戻金と異なる可能性があります。必ずJRA等の公式発表と照らし合わせてください。</p>
+                            <p>・表示されるオッズは、単勝オッズから算出した「推定値」となり、実際の払戻金と異なる可能性があります。必ず公式発表と照らし合わせてください。</p>
                             <p>・馬券の購入は、ご自身の判断と責任において行ってください。本ツールの利用により生じたいかなる損害についても、製作者は一切の責任を負いません。</p>
                         </div>
                     </div>
-
-                    {showRaceIdHelpModal && (
-                        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-                            <div className="bg-slate-900 border border-cyan-500/50 rounded-2xl p-6 max-w-md w-full relative">
-                                <button onClick={() => setShowRaceIdHelpModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white font-bold text-lg">✕</button>
-                                <h3 className="text-lg font-bold text-cyan-300 mb-4">🔰 レースIDの調べ方</h3>
-                                <div className="space-y-4 text-sm text-slate-300">
-                                    <p className="text-xs">netkeibaの出馬表やレース結果ページのURLから、<span className="text-white font-bold bg-cyan-900/50 px-1 rounded">12桁の数字</span>を入力してください。</p>
-                                    
-                                    <div className="bg-black/50 p-3 rounded-lg border border-slate-700 font-mono-custom text-xs break-all">
-                                        <span className="text-slate-500">https://race.netkeiba.com/race/result.html?race_id=</span><span className="text-cyan-400 font-bold bg-cyan-900/30 px-1">202606030811</span>
-                                    </div>
-                                    
-                                    <ul className="text-xs space-y-2 text-slate-400 list-disc pl-4">
-                                        <li>検証したい過去のレース（結果ページ）でも、当日のレース（出馬表・オッズページ）でもご利用いただけます。</li>
-                                        <li>IDは自動でブラウザに保存され、次回も同じレースから再開できます。</li>
-                                    </ul>
-                                </div>
-                                <button onClick={() => setShowRaceIdHelpModal(false)} className="mt-6 w-full bg-cyan-700 hover:bg-cyan-600 text-white py-3 rounded-lg font-bold">閉じる</button>
-                            </div>
-                        </div>
-                    )}
 
                     {showHelpModal && (
                         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
@@ -710,8 +648,8 @@
                                 <h3 className="text-lg font-bold text-white mb-4">🔰 はじめての方へ</h3>
                                 <div className="space-y-4 text-sm text-slate-300">
                                     <div className="bg-black/30 p-3 rounded-lg border border-slate-800">
-                                        <p className="font-bold text-cyan-400 mb-1">0. レースIDを入力する</p>
-                                        <p className="text-xs">対象のレースIDを入力し、「自動取得」ボタンを押して出馬表を読み込みます。</p>
+                                        <p className="font-bold text-cyan-400 mb-1">0. レース情報を取得する</p>
+                                        <p className="text-xs">対象レースを再取得ボタンを押して出馬表を読み込みます。</p>
                                     </div>
                                     <div className="bg-black/30 p-3 rounded-lg border border-slate-800">
                                         <p className="font-bold text-purple-400 mb-1">1. 出走馬に印をつける</p>
