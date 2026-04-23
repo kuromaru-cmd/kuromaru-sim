@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>黒マル式 資金配分シミュレーター V4.4 (管理者専用版)</title>
+<title>黒マル式 資金配分シミュレーター V4.5 (管理者専用版)</title>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -50,23 +50,19 @@ box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
 <script type="text/babel">
 const { useState, useMemo, useEffect } = React;
 
-const JSON_FILE_URL = "https://script.google.com/macros/s/AKfycbwoIW-y5KPtiztKzqZ8xdyDol_IYLJkws2SHhs4s3IgRmhYe5EhTMjGsAq7vLWMnnFu/exec";
+// --- API設定 ---
+const ODDS_API_URL = "https://script.google.com/macros/s/AKfycbzsZuk97H1-wLQULy6KbuqqL69G2tdltuMBM3GeBCSyheGtJ45k9wwqw7jjO0mTmoOm/exec";
 const formatCurrency = (num) => new Intl.NumberFormat('ja-JP').format(num);
 
-const ADMIN_DEFAULT_RACE_ID = "202606030811";
-
 const App = () => {
-const ODDS_API_URL = "https://script.google.com/macros/s/AKfycbzsZuk97H1-wLQULy6KbuqqL69G2tdltuMBM3GeBCSyheGtJ45k9wwqw7jjO0mTmoOm/exec";
 const [isFetchingOdds, setIsFetchingOdds] = useState(false);
-
-const [allRacesData, setAllRacesData] = useState([]);
-const [currentRaceIndex, setCurrentRaceIndex] = useState(0);
+const [isLoading, setIsLoading] = useState(true);
+const [raceInfo, setRaceInfo] = useState({ date: "", raceName: "読込中...", location: "", updatedAt: "-", raceId: "" });
 const [horses, setHorses] = useState([]);
 const [oddsData, setOddsData] = useState({});
-const [raceInfo, setRaceInfo] = useState({ date: "", raceName: "読込中...", location: "", updatedAt: "-" });
-const [isLoading, setIsLoading] = useState(true);
 
-const [targetRaceId, setTargetRaceId] = useState(localStorage.getItem('targetRaceId') || ADMIN_DEFAULT_RACE_ID);
+// 管理用：localStorageには「現在ブラウザでターゲットにしているID」を保存
+const [targetRaceId, setTargetRaceId] = useState(localStorage.getItem('targetRaceId') || "");
 const [raceType, setRaceType] = useState(localStorage.getItem('raceType') || "result");
 const [showAdminModal, setShowAdminModal] = useState(false);
 const [tempUrlInput, setTempUrlInput] = useState("");
@@ -92,23 +88,32 @@ fetchInitialCache();
 
 const fetchInitialCache = async () => {
 try {
+// 1. GASからキャッシュ（または永続保存されたメインレース）を取得
 const response = await fetch(`${ODDS_API_URL}?action=read`);
 const result = await response.json();
 
-if (result.status === "no_cache" || (result.race && result.race.raceId && result.race.raceId !== targetRaceId)) {
-    await fetchLatestOdds(targetRaceId, raceType, true);
+if (result.status === "no_cache") {
+    await fetchLatestOdds();
+    return;
+}
+
+// 2. ブラウザのtargetRaceIdが空の場合は、GAS側から返ってきた現在のメインレースIDをセット
+if (!targetRaceId && result.race?.raceId) {
+    setTargetRaceId(result.race.raceId);
+    localStorage.setItem('targetRaceId', result.race.raceId);
+}
+
+// 3. ID照合：ブラウザ側のターゲットとGAS側のデータが不一致なら同期
+if (targetRaceId && result.race?.raceId && result.race.raceId !== targetRaceId) {
+    await fetchLatestOdds(targetRaceId, raceType);
     return;
 }
 
 if (result.horses && result.oddsData) {
-setAllRacesData([result]);
 loadRaceData(result);
-} else {
-await fetchFallbackData();
 }
 } catch (e) {
-console.error("Cache load failed", e);
-await fetchFallbackData();
+console.error("Initial load failed", e);
 } finally {
 setIsLoading(false);
 }
@@ -121,8 +126,9 @@ setOddsData(data.oddsData || {});
 setRaceInfo({
 date: data.race?.date || "",
 raceName: data.race?.raceName || "名称未設定",
-location: data.race?.location === "自動取得" ? "" : (data.race?.location || ""),
-updatedAt: data.race?.updatedAt || "-"
+location: data.race?.location || "",
+updatedAt: data.race?.updatedAt || "-",
+raceId: data.race?.raceId || ""
 });
 
 const initialMarks = {};
@@ -133,10 +139,30 @@ setGeneratedBets([]);
 setResults([]);
 };
 
-const handleRaceChange = (e) => {
-const idx = Number(e.target.value);
-setCurrentRaceIndex(idx);
-loadRaceData(allRacesData[idx]);
+const fetchLatestOdds = async (id = targetRaceId, type = raceType) => {
+setIsFetchingOdds(true);
+try {
+// action=execute を指定することでGAS側の永続プロパティを更新させる
+const response = await fetch(`${ODDS_API_URL}?action=execute&race_id=${id}&type=${type}`);
+const result = await response.json();
+
+if (result.horses && result.oddsData) {
+loadRaceData(result);
+if (id) {
+    setTargetRaceId(id);
+    localStorage.setItem('targetRaceId', id);
+    localStorage.setItem('raceType', type);
+}
+} else {
+alert("データの取得に失敗しました: " + (result.message || ""));
+}
+} catch (error) {
+console.error("Odds fetch error:", error);
+alert("API通信エラーが発生しました。");
+} finally {
+setIsFetchingOdds(false);
+setIsLoading(false);
+}
 };
 
 const handleResetMarks = () => {
@@ -147,43 +173,6 @@ setHorseMarks(resetMarks);
 setFormation({});
 setGeneratedBets([]);
 setResults([]);
-}
-};
-
-const fetchFallbackData = async () => {
-try {
-const res = await fetch(JSON_FILE_URL);
-const data = await res.json();
-let validRaces = Array.isArray(data) ? data : [data];
-setAllRacesData(validRaces);
-loadRaceData(validRaces[0]);
-} catch (e) {
-console.error("バックアップデータの取得に失敗しました。", e);
-}
-};
-
-const fetchLatestOdds = async (id = targetRaceId, type = raceType, isInitial = false) => {
-setIsFetchingOdds(true);
-
-try {
-const response = await fetch(`${ODDS_API_URL}?race_id=${id}&admin_id=${ADMIN_DEFAULT_RACE_ID}&type=${type}`);
-const result = await response.json();
-
-if (result.horses && result.oddsData) {
-setAllRacesData([result]);
-loadRaceData(result);
-if (!isInitial) {
-    alert(`【${result.modeInfo || 'データ'}】読み込み完了！\nドライブへ同期しました`);
-}
-} else {
-alert("データの取得に失敗しました: " + (result.message || ""));
-}
-} catch (error) {
-console.error("Odds fetch error:", error);
-alert("API通信エラーが発生しました。");
-} finally {
-setIsFetchingOdds(false);
-if (isInitial) setIsLoading(false);
 }
 };
 
@@ -286,10 +275,6 @@ const numBudget = parseInt(budget, 10);
 const validBets = generatedBets.filter(b => !isNaN(parseFloat(b.odds)) && parseFloat(b.odds) > 0);
 if (validBets.length === 0) return;
 
-let newResults = [];
-const sumInverseOdds = validBets.reduce((acc, bet) => acc + (1 / parseFloat(bet.odds)), 0);
-const synthOddsCalc = sumInverseOdds > 0 ? 1 / sumInverseOdds : 0;
-
 const calcEqualDistribution = (betsList, totalFund) => {
 const sumInv = betsList.reduce((acc, bet) => acc + (1 / parseFloat(bet.odds)), 0);
 let allocated = 0;
@@ -317,12 +302,10 @@ const minCover = Math.ceil(numBudget / odds / 100) * 100;
 totalCover += minCover;
 return { ...bet, amount: minCover, odds };
 });
-
-if (totalCover > numBudget) {
-effectiveLogic = 'equal';
-}
+if (totalCover > numBudget) effectiveLogic = 'equal';
 }
 
+let newResults = [];
 if (effectiveLogic === 'equal') {
 const eqDist = calcEqualDistribution(validBets, numBudget);
 newResults = validBets.map(bet => {
@@ -338,25 +321,17 @@ targetBets = validBets.filter(b => b.type !== '枠連' && b.combo.some(no => hor
 targetBets = validBets.filter(b => b.type !== '枠連' && b.combo.some(no => horseMarks[no] === '☆'));
 }
 if (targetBets.length === 0) targetBets = validBets;
-
-if (leftover > 0) {
-const extraDist = calcEqualDistribution(targetBets, leftover);
+const extraDist = calcEqualDistribution(targetBets, leftover > 0 ? leftover : 0);
 newResults = baseAllocations.map(alloc => {
 const ext = extraDist.find(d => d.id === alloc.id);
 return { ...alloc, betAmount: alloc.amount + (ext ? ext.addedAmount : 0) };
 });
-} else {
-newResults = baseAllocations.map(alloc => ({ ...alloc, betAmount: alloc.amount }));
-}
 }
 
 const actualTotalBet = newResults.reduce((acc, curr) => acc + curr.betAmount, 0);
-const finalResults = newResults.map(res => {
-const payout = Math.floor(res.betAmount * res.odds);
-return { ...res, payout, profit: payout > 0 ? payout - actualTotalBet : -actualTotalBet };
-});
-setResults(finalResults);
-setSummary({ totalBet: actualTotalBet, syntheticOdds: synthOddsCalc });
+setResults(newResults.map(res => ({ ...res, payout: Math.floor(res.betAmount * res.odds), profit: Math.floor(res.betAmount * res.odds) - actualTotalBet })));
+const sumInv = validBets.reduce((acc, bet) => acc + (1 / parseFloat(bet.odds)), 0);
+setSummary({ totalBet: actualTotalBet, syntheticOdds: sumInv > 0 ? 1 / sumInv : 0 });
 setExpandedGroups({});
 };
 
@@ -366,57 +341,29 @@ const groups = {};
 results.forEach(res => {
 if (res.betAmount === 0) return;
 const key = `${res.type}_${res.betAmount}`;
-if (!groups[key]) {
-groups[key] = { key: key, type: res.type, betAmount: res.betAmount, items: [] };
-}
+if (!groups[key]) groups[key] = { key: key, type: res.type, betAmount: res.betAmount, items: [] };
 groups[key].items.push(res);
 });
 
 return Object.values(groups).map(group => {
 const type = group.type;
 let labelElements = {};
-let isSingle = group.items.length === 1;
-
-if (type === '単勝' || type === '複勝') {
-const pos1 = [...new Set(group.items.map(it => it.combo[0]))].sort((a,b)=>a-b).join(', ');
-labelElements = { badge: type, axis: pos1, tails: "", count: group.items.length };
-} else if (type === '枠連') {
-const pos1 = [...new Set(group.items.map(it => it.combo[0]))].sort((a,b)=>a-b).join(', ');
-const pos2 = [...new Set(group.items.map(it => it.combo[1]))].sort((a,b)=>a-b).join(', ');
-labelElements = { badge: type, axis: `${pos1}枠`, tails: pos2 ? `${pos2}枠` : "", count: group.items.length };
-} else if (type.includes('3連')) {
-const pos1 = [...new Set(group.items.map(it => it.combo[0]))].sort((a,b)=>a-b).join(',');
-const pos2 = [...new Set(group.items.map(it => it.combo[1]))].sort((a,b)=>a-b).join(',');
-const pos3 = [...new Set(group.items.map(it => it.combo[2]))].sort((a,b)=>a-b).join(',');
-labelElements = { badge: type, axis: pos1, tails: `${pos2} - ${pos3}`, count: group.items.length };
-} else {
-const pos1 = [...new Set(group.items.map(it => it.combo[0]))].sort((a,b)=>a-b).join(', ');
-const pos2 = [...new Set(group.items.map(it => it.combo[1]))].sort((a,b)=>a-b).join(', ');
-labelElements = { badge: type, axis: pos1, tails: pos2, count: group.items.length };
-}
-return { ...group, labelElements, isSingle };
+if (type === '単勝' || type === '複勝') labelElements = { badge: type, axis: group.items.map(it => it.combo[0]).join(', '), tails: "", count: group.items.length };
+else if (type === '枠連') labelElements = { badge: type, axis: `${group.items.map(it => it.combo[0]).join(', ')}枠`, tails: `${group.items.map(it => it.combo[1]).join(', ')}枠`, count: group.items.length };
+else if (type.includes('3連')) labelElements = { badge: type, axis: [...new Set(group.items.map(it => it.combo[0]))].join(','), tails: `${[...new Set(group.items.map(it => it.combo[1]))].join(',')} - ${[...new Set(group.items.map(it => it.combo[2]))].join(',')}`, count: group.items.length };
+else labelElements = { badge: type, axis: [...new Set(group.items.map(it => it.combo[0]))].join(', '), tails: [...new Set(group.items.map(it => it.combo[1]))].join(', '), count: group.items.length };
+return { ...group, labelElements, isSingle: group.items.length === 1 };
 });
 }, [results]);
 
 const groupedByBetType = useMemo(() => {
 const typesObj = {};
 allAvailableTypes.forEach(t => { typesObj[t] = []; });
-groupedResults.forEach(g => {
-if (typesObj[g.type]) typesObj[g.type].push(g);
-});
-return Object.keys(typesObj)
-.filter(t => typesObj[t].length > 0)
-.map(t => {
-const totalAmount = typesObj[t].reduce((sum, g) => sum + (g.betAmount * g.items.length), 0);
-return { type: t, groups: typesObj[t], totalAmount };
-});
+groupedResults.forEach(g => { if (typesObj[g.type]) typesObj[g.type].push(g); });
+return Object.keys(typesObj).filter(t => typesObj[t].length > 0).map(t => ({ type: t, groups: typesObj[t], totalAmount: typesObj[t].reduce((sum, g) => sum + (g.betAmount * g.items.length), 0) }));
 }, [groupedResults]);
 
-const toggleGroup = (key) => {
-setExpandedGroups(prev => ({ ...prev, [key]: !prev[key] }));
-};
-
-const markedHorsesKeys = Object.keys(horseMarks).filter(k => horseMarks[k] !== '');
+const toggleGroup = (key) => setExpandedGroups(prev => ({ ...prev, [key]: !prev[key] }));
 
 if (isLoading) return <div className="min-h-screen flex items-center justify-center font-mono-custom text-purple-300 tracking-widest animate-pulse">DRIVE CACHE LOADING...</div>;
 
@@ -438,87 +385,60 @@ return (
 
 <section className="glass-panel rounded-2xl p-5 mb-6 relative overflow-hidden">
 <div className="absolute top-0 left-0 w-1 h-full bg-purple-400"></div>
-
 <div className="bg-black/40 border border-white/10 rounded-lg p-3 mb-4 text-center">
 <span className="text-lg font-bold text-white tracking-wider">{raceInfo.raceName}</span>
 {raceInfo.location && <span className="text-sm text-slate-400 ml-2">({raceInfo.location})</span>}
 </div>
 
 <div className="flex flex-wrap justify-between items-center mb-4 gap-y-2">
-<h2 className="text-sm font-bold text-purple-300 flex items-center">
-<span className="bg-purple-900/50 px-2 py-0.5 rounded mr-2 text-[10px]">STEP 1</span>
-出走馬の印（予想）
-</h2>
+<h2 className="text-sm font-bold text-purple-300 flex items-center"><span className="bg-purple-900/50 px-2 py-0.5 rounded mr-2 text-[10px]">STEP 1</span> 出走馬の印</h2>
 <div className="flex items-center gap-2 ml-auto">
-<button onClick={() => setShowStep1HelpModal(true)} className="bg-slate-800 text-purple-200 border border-purple-500/50 px-2 py-1 rounded text-[10px] font-bold hover:bg-slate-700 transition-colors">
-❓ 印の意味
-</button>
-<button onClick={handleResetMarks} className="bg-slate-800/80 text-rose-300 border border-rose-500/50 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-900/50 transition-colors">
-🔄 リセット
-</button>
+<button onClick={() => setShowStep1HelpModal(true)} className="bg-slate-800 text-purple-200 border border-purple-500/50 px-2 py-1 rounded text-[10px] font-bold hover:bg-slate-700 transition-colors">❓ 印の意味</button>
+<button onClick={handleResetMarks} className="bg-slate-800/80 text-rose-300 border border-rose-500/50 px-2 py-1 rounded text-[10px] font-bold hover:bg-rose-900/50 transition-colors">🔄 リセット</button>
 </div>
 </div>
 
-<div className="flex justify-end mb-2">
-<button
-onClick={() => fetchLatestOdds(targetRaceId, raceType)}
-disabled={isFetchingOdds}
-className={`flex items-center space-x-2 px-4 py-3 rounded-lg font-bold text-sm transition-colors w-full justify-center ${
-isFetchingOdds
-? "bg-slate-700 text-slate-400 cursor-not-allowed"
-: "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]"
-}`}
->
-<span>{isFetchingOdds ? "🔄" : "⬇️"}</span>
-<span>{isFetchingOdds ? "オッズ取得中..." : "対象レースを再取得"}</span>
+<button onClick={() => fetchLatestOdds()} disabled={isFetchingOdds} className={`w-full py-3 mb-4 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 ${isFetchingOdds ? "bg-slate-700 text-slate-400" : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]"}`}>
+<span>{isFetchingOdds ? "🔄" : "⬇️"}</span>{isFetchingOdds ? "オッズ取得中..." : "対象レースを再同期"}
 </button>
-</div>
 
 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1 mt-4">
-{horses.map(horse => {
-const mark = horseMarks[horse.no] || '';
-return (
-<div key={horse.no} className={`flex justify-between items-center p-2 rounded-lg border ${mark ? 'bg-purple-900/30 border-purple-500/50' : 'bg-black/30 border-white/5'}`}>
+{horses.map(horse => (
+<div key={horse.no} className={`flex justify-between items-center p-2 rounded-lg border ${horseMarks[horse.no] ? 'bg-purple-900/30 border-purple-500/50' : 'bg-black/30 border-white/5'}`}>
 <div className="flex items-center gap-2 overflow-hidden w-2/3">
 <span className="text-[10px] text-slate-400 border border-slate-700 px-1 rounded">{horse.frame}枠{horse.no}番</span>
-<span className={`text-sm font-bold truncate ${mark ? 'text-white' : 'text-slate-400'}`}>{horse.name}</span>
+<span className={`text-sm font-bold truncate ${horseMarks[horse.no] ? 'text-white' : 'text-slate-400'}`}>{horse.name}</span>
 </div>
-<select value={mark} onChange={(e) => updateMark(horse.no, e.target.value)} className={`w-1/3 p-1 text-xs rounded outline-none ${mark ? 'bg-purple-600 text-white font-bold' : 'glass-input'}`}>
+<select value={horseMarks[horse.no]} onChange={(e) => updateMark(horse.no, e.target.value)} className={`w-1/3 p-1 text-xs rounded outline-none ${horseMarks[horse.no] ? 'bg-purple-600 text-white font-bold' : 'glass-input'}`}>
 <option value="" className="bg-slate-900">無印</option>
-{(mark === '◎' || currentDoubleCircleCount < 2) && <option value="◎" className="bg-slate-900">◎ 本命</option>}
+{(horseMarks[horse.no] === '◎' || currentDoubleCircleCount < 2) && <option value="◎" className="bg-slate-900">◎ 本命</option>}
 <option value="◯" className="bg-slate-900">◯ 対抗</option><option value="▲" className="bg-slate-900">▲ 単穴</option><option value="△" className="bg-slate-900">△ 連下</option><option value="☆" className="bg-slate-900">☆ 穴</option>
 </select>
 </div>
-);
-})}
+))}
 </div>
 </section>
 
-<section className={`glass-panel rounded-2xl p-5 mb-6 relative overflow-hidden transition-all ${markedHorsesKeys.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
+<section className={`glass-panel rounded-2xl p-5 mb-6 relative overflow-hidden transition-all ${Object.keys(horseMarks).filter(k => horseMarks[k] !== '').length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
 <div className="absolute top-0 left-0 w-1 h-full bg-cyan-400"></div>
-<h2 className="text-sm font-bold text-cyan-300 mb-4 flex items-center"><span className="bg-cyan-900/50 px-2 py-0.5 rounded mr-2 text-[10px]">STEP 2</span> 券種と買い目の組み立て（複数選択可）</h2>
+<h2 className="text-sm font-bold text-cyan-300 mb-4 flex items-center"><span className="bg-cyan-900/50 px-2 py-0.5 rounded mr-2 text-[10px]">STEP 2</span> 券種と買い目</h2>
 <div className="mb-4 flex flex-wrap gap-2">
 {allAvailableTypes.map(t => (
 <button key={t} onClick={() => toggleBetType(t)} className={`px-3 py-1.5 text-xs font-bold rounded-full border transition-all ${betTypes.includes(t) ? 'bg-cyan-500 text-white' : 'bg-black/30 text-slate-400 border-slate-700'}`}>{t}</button>
 ))}
 </div>
 <div className="bg-black/40 rounded-xl p-3 mb-4 border border-white/5 space-y-2">
-{markedHorsesKeys.map(noStr => {
-const no = Number(noStr);
-const h = horses.find(x => x.no === no);
-const f = formation[no] || {1:false, 2:false, 3:false};
-return (
-<div key={no} className="flex items-center justify-between">
+{Object.keys(horseMarks).filter(k => horseMarks[k] !== '').map(noStr => (
+<div key={noStr} className="flex items-center justify-between">
 <div className="flex items-center gap-2 w-1/2">
 <span className={`text-xs font-bold w-3 ${horseMarks[noStr] === '◎' ? 'text-rose-400' : 'text-yellow-300'}`}>{horseMarks[noStr]}</span>
-<span className="text-xs text-slate-200 truncate">{h?.name}</span>
+<span className="text-xs text-slate-200 truncate">{horses.find(x => x.no == noStr)?.name}</span>
 </div>
 <div className="flex justify-end gap-1 w-1/2">
-{[1,2,3].map(pos => <button key={pos} onClick={() => toggleFormation(no, pos)} className={`w-9 h-6 rounded text-[10px] ${f[pos] ? 'bg-cyan-500 text-white' : 'bg-slate-800 text-slate-500'}`}>{pos}頭目</button>)}
+{[1,2,3].map(pos => <button key={pos} onClick={() => toggleFormation(noStr, pos)} className={`w-9 h-6 rounded text-[10px] ${formation[noStr]?.[pos] ? 'bg-cyan-500 text-white' : 'bg-slate-800 text-slate-500'}`}>{pos}頭目</button>)}
 </div>
 </div>
-);
-})}
+))}
 </div>
 <button onClick={generateBets} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg">買い目を生成する</button>
 </section>
@@ -526,18 +446,12 @@ return (
 {generatedBets.length > 0 && (
 <section className="glass-panel rounded-2xl p-5 mb-6 animate-fade-in relative border-yellow-500/30">
 <div className="absolute top-0 left-0 w-1 h-full bg-yellow-400"></div>
-<div className="flex justify-between items-end mb-4 border-b border-white/10 pb-2">
-<h2 className="text-sm font-bold text-yellow-300 flex items-center">
-<span className="bg-yellow-900/50 px-2 py-0.5 rounded mr-2 text-[10px]">STEP 3</span>
-オッズの確認（修正可）
-</h2>
-<span className="text-[10px] text-yellow-400 font-bold bg-yellow-900/30 px-2 py-1 rounded">計 {generatedBets.length} 点</span>
-</div>
+<h2 className="text-sm font-bold text-yellow-300 mb-4 flex items-center"><span className="bg-yellow-900/50 px-2 py-0.5 rounded mr-2 text-[10px]">STEP 3</span> オッズ確認</h2>
 <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
 {generatedBets.map(bet => (
 <div key={bet.id} className="flex justify-between items-center bg-black/30 p-2 rounded border border-white/5">
 <div className="text-xs font-bold text-white truncate pr-2"><button onClick={() => handleRemoveBet(bet.id)} className="text-rose-500 mr-2 font-black">✕</button>{bet.memo}</div>
-<input type="number" step="0.1" value={bet.odds} onChange={(e) => handleUpdateOdds(bet.id, e.target.value)} className="glass-input w-20 p-1.5 rounded text-sm text-right font-mono-custom" placeholder="倍" />
+<input type="number" step="0.1" value={bet.odds} onChange={(e) => handleUpdateOdds(bet.id, e.target.value)} className="glass-input w-20 p-1.5 rounded text-sm text-right font-mono-custom" />
 </div>
 ))}
 </div>
@@ -549,207 +463,76 @@ return (
 <div className="absolute top-0 left-0 w-1 h-full bg-emerald-400"></div>
 <h2 className="text-sm font-bold text-emerald-300 mb-4 flex items-center"><span className="bg-emerald-900/50 px-2 py-0.5 rounded mr-2 text-[10px]">STEP 4</span> 予算と戦略</h2>
 <div className="space-y-4 mb-6">
-<div>
-<label className="block text-xs text-slate-400 mb-1">総予算 (円)</label>
 <input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} className={`glass-input w-full p-3 rounded-lg text-xl font-bold font-mono-custom ${!isBudgetValid ? 'border-rose-500 text-rose-300' : ''}`} />
-{!isBudgetValid && <p className="text-[10px] text-rose-400 mt-1">※最低 {formatCurrency(minRequiredBudget)}円 必要です</p>}
-</div>
 <select value={logic} onChange={(e) => setLogic(e.target.value)} className="glass-input w-full p-3 rounded-lg text-sm font-bold outline-none">
-<option value="equal" className="bg-slate-900">戦略A：均等払い戻し (どれが来ても同じ利益)</option>
+<option value="equal" className="bg-slate-900">戦略A：均等払い戻し</option>
 <option value="gami-favorite" className="bg-slate-900">戦略B：赤字防止 ＆ 本命(◎)重視</option>
 <option value="gami-longshot" className="bg-slate-900">戦略C：赤字防止 ＆ 穴馬(☆)重視</option>
 </select>
 </div>
-<button onClick={handleCalculate} disabled={!isBudgetValid} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white font-black py-4 text-lg rounded-lg shadow-[0_0_20px_rgba(16,185,129,0.4)] disabled:shadow-none">資金を自動配分する</button>
+<button onClick={handleCalculate} disabled={!isBudgetValid} className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white font-black py-4 text-lg rounded-lg shadow-[0_0_20px_rgba(16,185,129,0.4)]">資金を自動配分する</button>
 </section>
 )}
 
 {results.length > 0 && (
 <section className="glass-panel rounded-2xl p-5 mb-8 border-rose-500/30 animate-fade-in">
-<h2 className="text-xl font-black text-white mb-6 text-center tracking-widest">配分結果・買い目プラン</h2>
+<h2 className="text-xl font-black text-white mb-6 text-center tracking-widest">配分結果</h2>
 <div className="grid grid-cols-2 gap-4 mb-6 text-center">
-<div className="bg-black/30 p-3 rounded-xl border border-white/10">
-<span className="block text-[10px] text-slate-400 mb-1">実投資額</span>
-<div className="font-mono-custom text-lg font-bold text-white">{formatCurrency(summary.totalBet)}円</div>
-</div>
-<div className="bg-black/30 p-3 rounded-xl border border-cyan-500/30">
-<span className="block text-[10px] text-cyan-400 mb-1">合成オッズ</span>
-<div className="font-mono-custom text-lg font-bold text-cyan-300">{summary.syntheticOdds > 0 ? summary.syntheticOdds.toFixed(2) : '0.00'}倍</div>
-</div>
+<div className="bg-black/30 p-3 rounded-xl border border-white/10"><span className="block text-[10px] text-slate-400 mb-1">実投資額</span><div className="font-mono-custom text-lg font-bold text-white">{formatCurrency(summary.totalBet)}円</div></div>
+<div className="bg-black/30 p-3 rounded-xl border border-cyan-500/30"><span className="block text-[10px] text-cyan-400 mb-1">合成オッズ</span><div className="font-mono-custom text-lg font-bold text-cyan-300">{summary.syntheticOdds.toFixed(2)}倍</div></div>
 </div>
 <div className="space-y-5">
 {groupedByBetType.map((typeGroup) => (
 <div key={typeGroup.type} className="border border-slate-700/60 rounded-xl p-3 bg-black/20">
-<h3 className="text-sm font-bold text-slate-300 mb-3 border-b border-slate-700/80 pb-1 flex justify-between items-center">
-<div className="flex items-center">
-<span className="w-1.5 h-4 bg-slate-500 rounded-sm mr-2"></span>
-{typeGroup.type}
-</div>
-<span className="text-xs text-yellow-400 font-bold">計 {formatCurrency(typeGroup.totalAmount)}円</span>
-</h3>
-<div className="space-y-3">
-{typeGroup.groups.map((group) => {
-if (group.isSingle) {
-const res = group.items[0];
-const isLoss = res.profit < 0;
-return (
-<div key={group.key} className="bg-gradient-to-r from-black/40 to-slate-900/40 border border-white/10 rounded-lg p-3">
-<div className="flex justify-between items-center mb-2">
-<div className="flex items-center">
-<span className="text-cyan-300 font-bold text-sm">{res.combo.join(' - ')}</span>
-<span className="text-slate-400 text-[10px] ml-2 font-normal">({res.odds}倍)</span>
-</div>
-<span className="text-yellow-400 font-bold">{formatCurrency(group.betAmount)}<span className="text-[9px] ml-0.5 text-yellow-200">円</span></span>
-</div>
-<div className="border border-slate-600 rounded bg-black/30 p-2 flex justify-between items-center text-[10px]">
-<span className="text-slate-400">想定払戻: <span className="text-white font-bold text-xs ml-1">{formatCurrency(res.payout)}円</span></span>
-<span className="text-slate-400">想定利益: <span className={`font-bold text-xs ml-1 ${isLoss ? 'text-rose-400' : 'text-emerald-400'}`}>{isLoss ? '▲ ' : '+ '}{formatCurrency(Math.abs(res.profit))}円</span></span>
-</div>
-</div>
-);
-} else {
-return (
-<div key={group.key} className="bg-gradient-to-r from-black/40 to-slate-900/40 border border-white/10 rounded-lg overflow-hidden">
-<div onClick={() => toggleGroup(group.key)} className="p-3 cursor-pointer hover:bg-white/5 flex flex-col sm:flex-row sm:justify-between sm:items-center transition-colors gap-2">
-<div className="flex items-center flex-wrap gap-y-1 flex-1">
-<span className="text-cyan-300 font-bold text-sm">
-{group.labelElements.axis}
-{group.labelElements.tails && ` - ${group.labelElements.tails}`}
-</span>
-<span className="text-slate-500 text-[10px] ml-2 mt-0.5">({group.labelElements.count}点)</span>
-</div>
-<div className="flex items-center sm:ml-2 flex-shrink-0 self-end sm:self-auto">
-<span className="text-yellow-400 font-bold mr-2">{formatCurrency(group.betAmount)}<span className="text-[9px] ml-0.5 text-yellow-200">円/点</span></span>
-<span className="text-slate-500 text-[10px] w-10 text-right">{expandedGroups[group.key] ? '▲' : '▼ 詳細'}</span>
-</div>
+<h3 className="text-sm font-bold text-slate-300 mb-3 border-b border-slate-700/80 pb-1 flex justify-between"><span>{typeGroup.type}</span><span className="text-xs text-yellow-400">計 {formatCurrency(typeGroup.totalAmount)}円</span></h3>
+{typeGroup.groups.map((group) => (
+<div key={group.key} className="bg-gradient-to-r from-black/40 to-slate-900/40 border border-white/10 rounded-lg p-2 mb-2">
+<div onClick={() => !group.isSingle && toggleGroup(group.key)} className={`flex justify-between items-center ${!group.isSingle ? 'cursor-pointer' : ''}`}>
+<div className="text-cyan-300 font-bold text-sm">{group.labelElements.axis} {group.labelElements.tails && `- ${group.labelElements.tails}`} <span className="text-slate-500 text-[10px]">({group.labelElements.count}点)</span></div>
+<div className="text-yellow-400 font-bold text-sm">{formatCurrency(group.betAmount)}円{!group.isSingle && (expandedGroups[group.key] ? ' ▲' : ' ▼')}</div>
 </div>
 {expandedGroups[group.key] && (
-<div className="bg-black/20 p-2 border-t border-white/5 space-y-1 animate-fade-in">
+<div className="mt-2 pt-2 border-t border-white/5 space-y-1">
 {group.items.map(res => (
-<div key={res.id} className="flex flex-col sm:flex-row justify-between sm:items-center text-[10px] p-2 border-b border-white/5 last:border-0 gap-1">
-<div className="text-cyan-100 font-bold leading-tight">{res.combo.join(' - ')} <span className="font-normal text-slate-400 ml-1">({res.odds}倍)</span></div>
-<div className="flex flex-col sm:flex-row sm:gap-3 text-right">
-<div className="text-slate-400 text-[9px] sm:text-[10px]">想定払戻: <span className="text-white font-bold text-[10px] ml-1">{formatCurrency(res.payout)}円</span></div>
-<div className="text-slate-400 text-[9px] sm:text-[10px] sm:w-24">想定利益: <span className={`font-bold text-[10px] ml-1 ${res.profit < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{res.profit < 0 ?
-'▲ ' : '+ '}{formatCurrency(Math.abs(res.profit))}円</span></div>
-</div>
-</div>
+<div key={res.id} className="flex justify-between text-[10px] text-slate-400"><span>{res.combo.join('-')} ({res.odds}倍)</span><span>払戻: {formatCurrency(res.payout)}円 (利益: {res.profit > 0 ? '+' : ''}{formatCurrency(res.profit)}円)</span></div>
 ))}
 </div>
 )}
 </div>
-);
-}
-})}
-</div>
+))}
 </div>
 ))}
 </div>
 </section>
 )}
 
-<div className="mt-8 glass-panel p-5 rounded-xl border border-slate-700/50">
-<h3 className="text-xs font-bold text-slate-300 mb-3 flex items-center">
-<span className="w-1.5 h-1.5 bg-slate-500 rounded-full mr-2"></span>
-【免責事項・注意事項】
-</h3>
-<div className="space-y-2 text-[10px] text-slate-400 leading-relaxed">
-<p>・本ツールは、入力されたオッズと予算に基づく数学的な資金配分シミュレーターであり、馬券の的中や利益を保証するものではありません。</p>
-<p>・表示されるオッズは、単勝オッズから算出した「推定値」となり、実際の払戻金と異なる可能性があります。必ず公式発表と照らし合わせてください。</p>
-<p>・馬券の購入は、ご自身の判断と責任において行ってください。本ツールの利用により生じたいかなる損害についても、製作者は一切の責任を負いません。</p>
-</div>
-</div>
+{showHelpModal && <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm"><div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full relative"><button onClick={() => setShowHelpModal(false)} className="absolute top-4 right-4 text-slate-400">✕</button><h3 className="text-lg font-bold text-white mb-4">🔰 使い方</h3><div className="space-y-4 text-sm text-slate-300"><p>1. 右上の同期テキストを3回クリックして管理モードを起動</p><p>2. 対象レースのURLを入力して「URL同期」を実行</p><p>3. 予想印をつけて「買い目生成」→「資金配分」</p></div><button onClick={() => setShowHelpModal(false)} className="mt-6 w-full bg-slate-700 py-3 rounded-lg font-bold">閉じる</button></div></div>}
 
-{showHelpModal && (
-<div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-<div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full relative">
-<button onClick={() => setShowHelpModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white font-bold text-lg">✕</button>
-<h3 className="text-lg font-bold text-white mb-4">🔰 はじめての方へ</h3>
-<div className="space-y-4 text-sm text-slate-300">
-<div className="bg-black/30 p-3 rounded-lg border border-slate-800">
-<p className="font-bold text-cyan-400 mb-1">0. レース情報を取得する</p>
-<p className="text-xs">対象レースを再取得ボタンを押して出馬表を読み込みます。</p>
-</div>
-<div className="bg-black/30 p-3 rounded-lg border border-slate-800">
-<p className="font-bold text-purple-400 mb-1">1. 出走馬に印をつける</p>
-<p className="text-xs">予想に合わせて印をつけてください。</p>
-</div>
-<div className="bg-black/30 p-3 rounded-lg border border-slate-800">
-<p className="font-bold text-cyan-400 mb-1">2. 券種と買い目を作る</p>
-<p className="text-xs">買いたい券種を選び、買い目を生成します。</p>
-</div>
-<div className="bg-black/30 p-3 rounded-lg border border-slate-800">
-<p className="font-bold text-emerald-400 mb-1">3. 予算と戦略を決める</p>
-<p className="text-xs">予算を入力し、資金を自動配分します。</p>
-</div>
-</div>
-<button onClick={() => setShowHelpModal(false)} className="mt-6 w-full bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg font-bold">閉じる</button>
-</div>
-</div>
-)}
-
-{showStep1HelpModal && (
-<div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-<div className="bg-slate-900 border border-purple-500/50 rounded-2xl p-6 max-w-md w-full relative">
-<button onClick={() => setShowStep1HelpModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white font-bold text-lg">✕</button>
-<h3 className="text-lg font-bold text-purple-300 mb-4">🔰 各印の意味と自動セット機能</h3>
-<div className="space-y-3 text-sm text-slate-300 max-h-96 overflow-y-auto">
-<div className="bg-black/30 p-3 rounded-lg border border-slate-800"><p className="font-bold text-rose-400 mb-1">◎ (本命)</p><p className="text-xs">1〜3頭目に自動セット</p></div>
-<div className="bg-black/30 p-3 rounded-lg border border-slate-800"><p className="font-bold text-orange-400 mb-1">◯ (対抗)</p><p className="text-xs">1〜3頭目に自動セット</p></div>
-<div className="bg-black/30 p-3 rounded-lg border border-slate-800"><p className="font-bold text-yellow-400 mb-1">▲ (単穴)</p><p className="text-xs">1〜3頭目に自動セット</p></div>
-<div className="bg-black/30 p-3 rounded-lg border border-slate-800"><p className="font-bold text-emerald-400 mb-1">△ (連下)</p><p className="text-xs">2〜3頭目に自動セット</p></div>
-<div className="bg-black/30 p-3 rounded-lg border border-slate-800"><p className="font-bold text-blue-400 mb-1">☆ (穴)</p><p className="text-xs">3頭目のみに自動セット</p></div>
-</div>
-<button onClick={() => setShowStep1HelpModal(false)} className="mt-6 w-full bg-purple-700 hover:bg-purple-600 text-white py-3 rounded-lg font-bold">閉じる</button>
-</div>
-</div>
-)}
+{showStep1HelpModal && <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm"><div className="bg-slate-900 border border-purple-500/50 rounded-2xl p-6 max-w-md w-full relative"><button onClick={() => setShowStep1HelpModal(false)} className="absolute top-4 right-4 text-slate-400">✕</button><h3 className="text-lg font-bold text-purple-300 mb-4">🔰 印の意味</h3><div className="space-y-3 text-xs text-slate-300"><p>◎◯▲：1〜3頭目にセット</p><p>△：2〜3頭目にセット</p><p>☆：3頭目のみセット</p></div><button onClick={() => setShowStep1HelpModal(false)} className="mt-6 w-full bg-purple-700 py-3 rounded-lg font-bold">閉じる</button></div></div>}
 
 {showAdminModal && (
-<div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+<div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
 <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full relative">
-<button onClick={() => setShowAdminModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white font-bold text-lg">✕</button>
+<button onClick={() => setShowAdminModal(false)} className="absolute top-4 right-4 text-slate-400">✕</button>
 <h3 className="text-lg font-bold text-white mb-4">管理者専用：ターゲット同期</h3>
-<p className="text-sm text-slate-300 mb-4">
-対象レースのnetkeiba URLまたは12桁のレースIDを入力してください。<br/>
-変更後、推定オッズエンジンが自動的に再実行されます。
-</p>
-<input 
-type="text" 
-placeholder="https://race.netkeiba.com/race/result.html?race_id=..."
-value={tempUrlInput}
-onChange={(e) => setTempUrlInput(e.target.value)}
-className="glass-input w-full p-3 rounded-lg text-sm text-white mb-4 outline-none"
-/>
-<button 
-onClick={() => {
-let id = targetRaceId;
-let type = raceType;
-
+<input type="text" placeholder="URLまたは12桁IDを入力" value={tempUrlInput} onChange={(e) => setTempUrlInput(e.target.value)} className="glass-input w-full p-3 rounded-lg text-sm text-white mb-4" />
+<button onClick={() => {
+let id = targetRaceId, type = raceType;
 if (tempUrlInput.includes("race_id=")) {
 id = tempUrlInput.split("race_id=")[1].split("&")[0];
 type = tempUrlInput.includes("shutuba.html") ? "shutuba" : "result";
-} else if (tempUrlInput.length === 12 && /^\d+$/.test(tempUrlInput)) {
-id = tempUrlInput;
-}
-
-localStorage.setItem('targetRaceId', id);
-localStorage.setItem('raceType', type);
+} else if (tempUrlInput.length === 12) { id = tempUrlInput; }
 setTargetRaceId(id);
 setRaceType(type);
+localStorage.setItem('targetRaceId', id);
+localStorage.setItem('raceType', type);
 setShowAdminModal(false);
 setTempUrlInput("");
-
 fetchLatestOdds(id, type);
-}}
-className="w-full bg-purple-700 hover:bg-purple-600 text-white py-3 rounded-lg font-bold transition-colors"
->
-URL同期を実行
-</button>
+}} className="w-full bg-purple-700 py-3 rounded-lg font-bold transition-colors">URL同期を実行</button>
 </div>
 </div>
 )}
-
 </div>
 );
 };
