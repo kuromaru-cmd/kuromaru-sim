@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>黒マル式 資金配分シミュレーター V4.5 (管理者専用版)</title>
+<title>黒マル式 資金配分シミュレーター V4.6 (管理者専用版)</title>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -93,7 +93,7 @@ const response = await fetch(`${ODDS_API_URL}?action=read`);
 const result = await response.json();
 
 if (result.status === "no_cache") {
-    await fetchLatestOdds();
+    await fetchLatestOdds(targetRaceId, raceType, true);
     return;
 }
 
@@ -105,7 +105,7 @@ if (!targetRaceId && result.race?.raceId) {
 
 // 3. ID照合：ブラウザ側のターゲットとGAS側のデータが不一致なら同期
 if (targetRaceId && result.race?.raceId && result.race.raceId !== targetRaceId) {
-    await fetchLatestOdds(targetRaceId, raceType);
+    await fetchLatestOdds(targetRaceId, raceType, true);
     return;
 }
 
@@ -139,7 +139,7 @@ setGeneratedBets([]);
 setResults([]);
 };
 
-const fetchLatestOdds = async (id = targetRaceId, type = raceType) => {
+const fetchLatestOdds = async (id = targetRaceId, type = raceType, isInitial = false) => {
 setIsFetchingOdds(true);
 try {
 // action=execute を指定することでGAS側の永続プロパティを更新させる
@@ -152,6 +152,9 @@ if (id) {
     setTargetRaceId(id);
     localStorage.setItem('targetRaceId', id);
     localStorage.setItem('raceType', type);
+}
+if (!isInitial) {
+    alert(`【${result.modeInfo || 'データ'}】読み込み完了！\n最新オッズを取得しました`);
 }
 } else {
 alert("データの取得に失敗しました: " + (result.message || ""));
@@ -398,8 +401,8 @@ return (
 </div>
 </div>
 
-<button onClick={() => fetchLatestOdds()} disabled={isFetchingOdds} className={`w-full py-3 mb-4 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 ${isFetchingOdds ? "bg-slate-700 text-slate-400" : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]"}`}>
-<span>{isFetchingOdds ? "🔄" : "⬇️"}</span>{isFetchingOdds ? "オッズ取得中..." : "対象レースを再同期"}
+<button onClick={() => fetchLatestOdds(targetRaceId, raceType, false)} disabled={isFetchingOdds} className={`w-full py-3 mb-4 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2 ${isFetchingOdds ? "bg-slate-700 text-slate-400" : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]"}`}>
+<span>{isFetchingOdds ? "🔄" : "⬇️"}</span>{isFetchingOdds ? "オッズ取得中..." : "最新オッズを取得"}
 </button>
 
 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1 mt-4">
@@ -528,7 +531,7 @@ localStorage.setItem('targetRaceId', id);
 localStorage.setItem('raceType', type);
 setShowAdminModal(false);
 setTempUrlInput("");
-fetchLatestOdds(id, type);
+fetchLatestOdds(id, type, false);
 }} className="w-full bg-purple-700 py-3 rounded-lg font-bold transition-colors">URL同期を実行</button>
 </div>
 </div>
