@@ -274,6 +274,12 @@
                     if (weather === 'sunny' && cond === 1 && horse.frame >= 8) { biasDiff *= 0.5; alerts.push({ text: "☀️ 天候補正: 外枠不利を軽減", type: "magic" }); }
                     if (isMagicJockey && biasDiff > 1) { biasDiff = 1; alerts.push({ text: "✨ 上位騎手の手腕: バイアス不利無効化", type: "magic" }); }
                     
+                    // 【追加】大箱 × 適性上位（SまたはA）の7〜8枠は、イン有利バイアスの不利を半減
+                    if (course === 3 && horse.frame >= 7 && (horse.aptitude === 'S' || horse.aptitude === 'A') && effectiveBias <= 2) {
+                        biasDiff *= 0.5;
+                        alerts.push({ text: "🛡️ 大箱適性: 外枠不利のバイアスを相殺", type: "magic" });
+                    }
+                    
                     // ==========================================
                     // OMEGA プロトコル群 (Ver 5.0対応)
                     // ==========================================
@@ -387,6 +393,7 @@
                         score += (baseScoreRef < 70 ? 5 : 2); alerts.push({ text: "🧬 血統適合: 舞台適性A", type: "warning" });
                     }
                     
+                    // スコアの限界突破を許容するため、Math.min(100, ...) は使用せずそのまま丸める
                     score = Math.max(0, Math.round(score));
                     return { ...horse, tags: processedTags, score, alerts, isMagicJockey, effectiveSpurt, baseScoreRef };
                 });
