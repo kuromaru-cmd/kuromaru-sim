@@ -35,31 +35,6 @@
 
         const API_URL = "https://script.google.com/macros/s/AKfycbxV0f-VF_lw-FQjQ1S2WFUh06QkBRuST8z1SkqFNZ9xwYIGytG6DdCZ2qjVKYAxvxI5/exec";
 
-        const AI_PROMPT = `「血統・コース適性専門AI」「展開・戦術専門AI」「状態・メンタル専門AI」が作成した3つのレポートを入力します。
-あなたの任務は、これらの非構造化データを統合し、推測やハルシネーションを一切排除して、指定されたJSONフォーマットに変換することです。
-
-⚠️【ハルシネーション防止の絶対原則：厳守事項】
-1. 内部記憶の完全遮断：本タスクにおいては、AIが持つ過去の競馬の知識（過去の同名レースの結果など）の参照を完全に禁止します。
-2. ドキュメント絶対主義：出力するすべてのデータは、必ず「提供された3つのレポート」の中に明記されているもののみを使用してください。
-3. 出力前クロスチェック：JSONを出力する直前に、生成したデータが「レポート内の事実」と完全に一致しているか内部で必ず確認してください。
-4. スコア計算の禁止：基礎能力（baseScore）はAIで計算せず、必ず「適性（aptitude）」と「状態（condition）」の生データ（S/A/B/C/Unknown）として出力してください。
-
-【ステップ1：事実の抽出と競合解決（中間推論）】
-まず、3つのレポートから各馬のデータを箇条書きで抽出してください。その際、レポート間で情報が競合している場合は、以下の「裁定ルール」に厳格に従って解決してください。
-・「ペース、展開、ポジション、トラックバイアス」に関する競合 ＝ 【展開・戦術専門AI】を絶対優先。
-・「状態、勝負気配、馬体重、精神的自滅リスク（MDF）」に関する競合 ＝ 【状態・メンタル専門AI】を絶対優先。
-・「血統、過去の適性」に関する競合 ＝ 【血統・コース適性専門AI】を絶対優先。
-
-【ステップ2：エビデンスの確認とUnknown処理】
-抽出した情報の中に、出力すべきJSONの項目を満たすデータが存在しない場合、絶対に推測で補完せず、すべて "Unknown" （数値の場合は null または 0）に置き換えてください。
-
-【ステップ3：フラグの独立化とMinified JSONの生成】
-「大箱の罠」などの危険サインは isTrap に、「イン突き」などの空間ハックは isSpaceHack に boolean(true/false) で独立させ、UI表示用の定性テキスト（強気、泣き等）のみを tags 配列に入れてください。
-確定した「事実のみ」を使用して、最終的なJSONデータを生成してください。必ず \`\`\`json と \`\`\` のコードブロックで囲んで出力してください。
-
-■JSONスキーマ（Ver 5.0）
-{"race":{"updatedAt":"YYYY/MM/DD","date":"YYYY/MM/DD","raceName":"レース名","courseName":"コース","raceType":"older/3yo","course":1(小)/2(中)/3(大),"weather":"sunny/cloudy/rainy","bias":1-5,"pace":1-3,"pacePlanB":1-3/null,"cond":1-3,"version":"5.0"},"horses":[{"no":1,"name":"馬名","frame":1,"runStyle":1-4,"odds":0.0,"aptitude":"S/A/B/C/Unknown","condition":"S/A/B/C/Unknown","load":58.0,"mdf":0-3,"optBias":1-5,"optPace":1-3,"optCond":1-3,"optCourse":1-3,"spurt":1-5,"jockeyName":"氏名","jockeyClass":"S/A/B","specialJockey":true/false,"popularity":1-18,"weight":500,"weightDiff":0,"isTransport":true/false,"isTrap":true/false,"isSpaceHack":true/false,"pedigreeApt":"S/A/B","tags":["タグ1"],"isMarked":true}]}`;
-
         const NativeRadarChart = ({ data }) => {
             const size = 220;
             const cx = size / 2;
@@ -138,7 +113,6 @@
 
             const [isLoading, setIsLoading] = useState(true);
             const [errorMsg, setErrorMsg] = useState("");
-            const [copyStatus, setCopyStatus] = useState('');
 
             const loadRaceData = (parsedData) => {
                 if (!parsedData || !parsedData.race || !parsedData.horses) return;
@@ -282,6 +256,12 @@
                     if (horse.mdf >= 2) {
                         effectiveSpurt = Math.max(1, effectiveSpurt - 2);
                         alerts.push({ text: "📉 MDF警告: 精神的自滅による失速リスク大", type: "danger" });
+                    }
+
+                    // シナジーフラグの処理 (限界突破特注ボーナス)
+                    if (horse.isSynergy) {
+                        score += 10;
+                        alerts.push({ text: "✨ 好相性", type: "magic" });
                     }
 
                     // 罠フラグの処理
@@ -509,12 +489,6 @@
                 window.open(xUrl, '_blank');
             };
 
-            const handleCopyPrompt = () => {
-                navigator.clipboard.writeText(AI_PROMPT).then(() => {
-                    setCopyStatus('✅ コピー完了'); setTimeout(() => setCopyStatus(''), 2500);
-                }).catch(() => setCopyStatus('❌ 失敗'));
-            };
-
             if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-950 flex-col text-cyan-400 font-bold tracking-widest animate-pulse"><div className="w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4"></div>CONNECTING...</div>;
             if (errorMsg) return <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4"><div className="bg-slate-900 border border-rose-500 p-6 rounded-lg text-center"><h2 className="text-2xl font-bold text-rose-500 mb-2">通信エラー</h2><p className="text-slate-300">{errorMsg}</p></div></div>;
 
@@ -704,7 +678,6 @@
                             <li><strong>免責事項：</strong>本ツールの利用によって生じたいかなる損害につきましても、管理者は一切の責任を負いかねます。</li>
                         </ul>
                     </div>
-                    <div className="absolute bottom-4 right-4"><button onClick={handleCopyPrompt} className="text-[10px] text-slate-800 hover:text-slate-500 transition-colors font-mono">{copyStatus ? copyStatus : "🔒 Admin"}</button></div>
                 </div>
             );
         }
