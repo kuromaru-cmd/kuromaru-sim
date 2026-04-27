@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+    
     <title>黒マル式競馬予想シュミレーター (Public Edition)</title>
     <meta name="description" content="AI分析データを用いた次世代競馬予想シミュレーター。当日のトラックバイアスや展開を自由に変更して、あらゆる「激走シナリオ」を検証。">
     <meta property="og:title" content="黒マル式競馬予想シュミレーター">
@@ -93,7 +93,7 @@
             const [allRacesData, setAllRacesData] = useState([]);
             const [currentRaceIndex, setCurrentRaceIndex] = useState(0);
             const [horses, setHorses] = useState([]);
-            const [raceInfo, setRaceInfo] = useState({ date: "読込中...", raceName: "データ取得中", courseName: "-", updatedAt: "----/--/--", pacePlanB: null });
+            const [raceInfo, setRaceInfo] = useState({ date: "読込中...", raceName: "データ取得中", courseName: "-", updatedAt: "----/--/--", pacePlanB: null, isSyncSlow: false });
             const [originalSettings, setOriginalSettings] = useState(null);
 
             const [weather, setWeather] = useState('sunny');
@@ -125,7 +125,8 @@
                     raceName: parsedData.race.raceName || "未設定",
                     courseName: parsedData.race.courseName || "-",
                     updatedAt: parsedData.race.updatedAt || "----/--/--",
-                    pacePlanB: parsedData.race.pacePlanB || null
+                    pacePlanB: parsedData.race.pacePlanB || null,
+                    isSyncSlow: parsedData.race.isSyncSlow || false
                 });
 
                 const aiRaceType = parsedData.race.raceType || 'older';
@@ -277,14 +278,14 @@
                         alerts.push({ text: "☀️ 天候補正: 外枠不利を軽減", type: "magic" }); }
                     if (isMagicJockey && biasDiff > 1) { biasDiff = 1; alerts.push({ text: "✨ 上位騎手の手腕: バイアス不利無効化", type: "magic" }); }
 
-                    // 【追加】大箱 × 適性上位（SまたはA）の7〜8枠は、イン有利バイアスの不利を半減
+                    // 【大箱 × 適性上位（SまたはA）の7〜8枠は、イン有利バイアスの不利を半減】
                     if (course === 3 && horse.frame >= 7 && (horse.aptitude === 'S' || horse.aptitude === 'A') && effectiveBias <= 2) {
                         biasDiff *= 0.5;
                         alerts.push({ text: "🛡️ 大箱適性: 外枠不利のバイアスを相殺", type: "magic" });
                     }
 
                     // ==========================================
-                    // OMEGA プロトコル群 (Ver 5.4対応)
+                    // OMEGA プロトコル群 (Ver 5.5対応)
                     // ==========================================
 
                     // 【OMEGA 3.0 / 4.4】 展開支配系
@@ -331,6 +332,11 @@
                     // 【OMEGA 5.4】大箱スローでのトップスピード不足の罠
                     if (course === 3 && currentPace === 1 && effectiveSpurt <= 2) {
                         score -= 20; alerts.push({ text: "⚠️ スピード不足: 大箱スローの瞬発力勝負で不利", type: "warning" });
+                    }
+
+                    // 【OMEGA 5.5】イン詰まりリスク（物理・精神的弱点）
+                    if (currentPace === 1 && horse.frame <= 3 && horse.runStyle >= 3 && horse.isBlockedRisk) {
+                        score -= 20; alerts.push({ text: "⚠️ 内枠詰まりリスク: スロー密集時の進路確保に懸念", type: "danger" });
                     }
 
                     // ------------------------------------------
@@ -518,7 +524,7 @@
                         <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-3">
                             <h1 className="text-lg sm:text-xl md:text-3xl font-black text-cyan-400 tracking-wider neon-text-cyan flex flex-wrap items-center gap-2">
                                 <span>🐴 黒マル式競馬予想シュミレーター</span>
-                                <span className="text-[10px] md:text-xs text-slate-500 border border-slate-600 px-2 py-0.5 rounded font-normal">公開版 Ver 5.4</span>
+                                <span className="text-[10px] md:text-xs text-slate-500 border border-slate-600 px-2 py-0.5 rounded font-normal">公開版 Ver 5.5</span>
                             </h1>
                             <div className="inline-flex items-center">
                                 <span className="bg-slate-800 text-emerald-400 border border-emerald-700/50 px-3 py-1.5 rounded text-xs font-bold shadow-inner">🔄 データ更新日：{raceInfo.updatedAt}</span>
@@ -542,6 +548,14 @@
                         <div className="bg-slate-700 px-3 py-1 rounded text-xs text-slate-200 shrink-0">{raceInfo.courseName}</div>
                         <div className="bg-slate-800 border border-slate-600 px-3 py-1 rounded text-[10px] md:text-xs text-slate-300 flex items-center shrink-0">条件: {raceType === '3yo' ? "3歳若駒戦" : "古馬・標準G1"}</div>
                     </div>
+
+                    {/* Ver 5.5 同調スローアラート */}
+                    {raceInfo.isSyncSlow && (
+                        <div className="bg-slate-900/90 border border-amber-500/50 p-3 rounded-lg mb-6 flex items-center shadow-[0_0_15px_rgba(245,158,11,0.15)] relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
+                            <div className="text-amber-400 font-bold text-sm ml-2">⚠️ ペース同調: 逃げ馬多数でもスローペースの可能性あり</div>
+                        </div>
+                    )}
 
                     <div className="mb-6 bg-slate-950 p-4 rounded-lg border border-cyan-900 relative overflow-hidden min-h-[260px] flex flex-col">
                         <h3 className="text-emerald-400 font-bold border-b border-slate-800 pb-2 mb-4 text-sm flex flex-wrap items-center gap-2">
