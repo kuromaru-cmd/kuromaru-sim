@@ -151,7 +151,7 @@ let result = await response.json();
 if (Array.isArray(result)) result = result[0];
 
 // データ取得に失敗した場合の自動リトライ
-if ((result.status === "error" || !result.horses || result.horses.length === 0) && !isInitial) {
+if ((!result.horses || result.horses.length === 0 || result.status === "error") && !isInitial) {
     const fallbackType = type === "result" ? "shutuba" : "result";
     console.log(`データが見つかりません。${fallbackType} モードで再試行します...`);
     response = await fetch(`${ODDS_API_URL}?action=execute&race_id=${id}&type=${fallbackType}`);
@@ -160,20 +160,18 @@ if ((result.status === "error" || !result.horses || result.horses.length === 0) 
     if (Array.isArray(result)) result = result[0];
 
     // リトライ成功時に type の状態を上書きする
-    if (!result.status || result.status !== "error") {
-        if (result.horses && result.horses.length > 0) {
-            type = fallbackType;
-            setRaceType(type);
-        }
+    if (result.horses && result.horses.length > 0) {
+        type = fallbackType;
+        setRaceType(type);
     }
 }
 
-// 【変更】GAS側からのエラー（未発表などによるパース失敗）を詳細に表示
-if (result.status === "error") {
+// 【変更】すべてのエラーパターン（未発表、ID間違い、空データ等）を統合して優しく表示
+if (!result.horses || result.horses.length === 0 || result.status === "error") {
     if (!isInitial) {
-        alert("オッズ情報が取得できません。時間を置いて再度取得を行ってください。\n\n【オッズ取得の目安】\n・当日開催レース：午前10時頃〜\n・翌日開催レース：前日午前10時頃〜\n（※重賞等の前日発売対象レースは金曜18時頃から順次取得可能となります）");
+        alert("オッズ情報が取得できません。時間を置いて再度取得を行ってください。\n\n【オッズ取得の目安】\n・当日開催レース：午前10時頃〜\n・翌日開催レース：前日午前10時頃〜\n（※重賞等の前日発売対象レースは金曜18時頃から順次取得可能となります）\n\n※レースIDが誤っている場合もこのメッセージが表示されます。");
     }
-} else if (result.horses && result.oddsData) {
+} else {
     loadRaceData(result);
     if (id) {
         setTargetRaceId(id);
@@ -183,8 +181,6 @@ if (result.status === "error") {
     if (!isInitial) {
         alert(`【${result.modeInfo || 'データ'}】読み込み完了！\n最新オッズを取得しました`);
     }
-} else {
-    alert("データの取得に失敗しました。\nレースIDが間違っているか、ページが存在しません。");
 }
 } catch (error) {
 console.error("Odds fetch error:", error);
