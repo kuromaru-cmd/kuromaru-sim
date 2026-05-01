@@ -145,10 +145,26 @@ const fetchLatestOdds = async (id = targetRaceId, type = raceType, isInitial = f
 setIsFetchingOdds(true);
 try {
 // action=execute を指定することでGAS側の永続プロパティを更新させる
-const response = await fetch(`${ODDS_API_URL}?action=execute&race_id=${id}&type=${type}`);
+let response = await fetch(`${ODDS_API_URL}?action=execute&race_id=${id}&type=${type}`);
 let result = await response.json();
 
 if (Array.isArray(result)) result = result[0];
+
+// 【追加】データ取得に失敗した場合（未来のレースなのにresultで検索した等）の自動リトライ
+if ((!result.horses || result.horses.length === 0) && !isInitial) {
+    const fallbackType = type === "result" ? "shutuba" : "result";
+    console.log(`データが見つかりません。${fallbackType} モードで再試行します...`);
+    response = await fetch(`${ODDS_API_URL}?action=execute&race_id=${id}&type=${fallbackType}`);
+    result = await response.json();
+    
+    if (Array.isArray(result)) result = result[0];
+
+    // リトライ成功時に type の状態を上書きする
+    if (result.horses && result.horses.length > 0) {
+        type = fallbackType;
+        setRaceType(type);
+    }
+}
 
 if (result.horses && result.oddsData) {
 loadRaceData(result);
@@ -161,7 +177,7 @@ if (!isInitial) {
     alert(`【${result.modeInfo || 'データ'}】読み込み完了！\n最新オッズを取得しました`);
 }
 } else {
-alert("データの取得に失敗しました: " + (result.message || ""));
+alert("データの取得に失敗しました。\nレースIDが間違っているか、ページが存在しません。");
 }
 } catch (error) {
 console.error("Odds fetch error:", error);
