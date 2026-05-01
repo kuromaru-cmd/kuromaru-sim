@@ -90,7 +90,9 @@ const fetchInitialCache = async () => {
 try {
 // 1. GASからキャッシュ（または永続保存されたメインレース）を取得
 const response = await fetch(`${ODDS_API_URL}?action=read`);
-const result = await response.json();
+let result = await response.json();
+
+if (Array.isArray(result)) result = result[0];
 
 if (result.status === "no_cache") {
     await fetchLatestOdds(targetRaceId, raceType, true);
@@ -144,7 +146,9 @@ setIsFetchingOdds(true);
 try {
 // action=execute を指定することでGAS側の永続プロパティを更新させる
 const response = await fetch(`${ODDS_API_URL}?action=execute&race_id=${id}&type=${type}`);
-const result = await response.json();
+let result = await response.json();
+
+if (Array.isArray(result)) result = result[0];
 
 if (result.horses && result.oddsData) {
 loadRaceData(result);
@@ -275,8 +279,11 @@ const isBudgetValid = parseInt(budget, 10) >= minRequiredBudget && generatedBets
 const handleCalculate = () => {
 if (!isBudgetValid) return;
 const numBudget = parseInt(budget, 10);
-const validBets = generatedBets.filter(b => !isNaN(parseFloat(b.odds)) && parseFloat(b.odds) > 0);
-if (validBets.length === 0) return;
+const validBets = generatedBets.filter(b => !isNaN(parseFloat(b.odds)) && parseFloat(b.odds) > 1.0);
+if (validBets.length === 0) {
+    alert("有効なオッズ(1.1倍以上)がありません。");
+    return;
+}
 
 const calcEqualDistribution = (betsList, totalFund) => {
 const sumInv = betsList.reduce((acc, bet) => acc + (1 / parseFloat(bet.odds)), 0);
